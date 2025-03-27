@@ -1,20 +1,8 @@
 /*******************************************************************
  *
- * main.c - LVGL simulator for GNU/Linux
+ * main.c - LVGL Camper GUI for GNU/Linux
  *
- * Based on the original file from the repository
- *
- * @note eventually this file won't contain a main function and will
- * become a library supporting all major operating systems
- *
- * To see how each driver is initialized check the
- * 'src/lib/display_backends' directory
- *
- * - Clean up
- * - Support for multiple backends at once
- *   2025 EDGEMTech Ltd.
- *
- * Author: EDGEMTech Ltd, Erik Tagirov (erik.tagirov@edgemtech.ch)
+ * Integrated SDL backend directly in this file
  *
  ******************************************************************/
 #include <unistd.h>
@@ -24,26 +12,29 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdarg.h>
 
 #include "lvgl/lvgl.h"
 #include "lvgl/demos/lv_demos.h"
+#include "./lib/lv_sdl_disp.h"
+#include "ui/ui.h" 
 
-#include "driver_backends.h"
-#include "simulator_util.h"
-#include "simulator_settings.h"
+/* Simulator settings */
+typedef struct {
+    int window_width;
+    int window_height;
+} simulator_settings_t;
+
+simulator_settings_t settings = {
+    .window_width = 1024,
+    .window_height = 600
+};
 
 /* Internal functions */
-static void configure_simulator(int argc, char **argv);
+static void configure(int argc, char **argv);
 static void print_lvgl_version(void);
 static void print_usage(void);
-
-/* contains the name of the selected backend if user
- * has specified one on the command line */
-static char *selected_backend;
-
-/* Global simulator settings, defined in lv_linux_backend.c */
-extern simulator_settings_t settings;
-
+static void tick_thread_init(void);
 
 /**
  * @brief Print LVGL version
@@ -62,32 +53,35 @@ static void print_lvgl_version(void)
  */
 static void print_usage(void)
 {
-    fprintf(stdout, "\nlvglsim [-V] [-B] [-b backend_name] [-W window_width] [-H window_height]\n\n");
-    fprintf(stdout, "-V print LVGL version\n");
-    fprintf(stdout, "-B list supported backends\n");
+    fprintf(stdout, "\ncamper-gui [-V] [-W width] [-H height]\n\n");
+    fprintf(stdout, "-V      Print Camper GUI version\n");
+    fprintf(stdout, "-W      Set window width\n");
+    fprintf(stdout, "-H      Set window height\n");
 }
 
 /**
- * @brief Configure simulator
- * @description process arguments recieved by the program to select
- * appropriate options
- * @param argc the count of arguments in argv
- * @param argv The arguments
+ * @brief Helper function to exit with error message
  */
-static void configure_simulator(int argc, char **argv)
+static void die(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    exit(EXIT_FAILURE);
+}
+
+/**
+ * @brief Parse command line arguments and configure the application
+ */
+static void configure(int argc, char **argv)
 {
     int opt = 0;
-    char *backend_name;
 
-    selected_backend = NULL;
-    driver_backends_register();
-
-    /* Default values */
-    settings.window_width = atoi(getenv("LV_SIM_WINDOW_WIDTH") ? : "800");
-    settings.window_height = atoi(getenv("LV_SIM_WINDOW_HEIGHT") ? : "480");
+    /* Default values already set in global settings */
 
     /* Parse the command-line options. */
-    while ((opt = getopt (argc, argv, "b:fmW:H:BVh")) != -1) {
+    while ((opt = getopt(argc, argv, "W:H:Vh")) != -1) {
         switch (opt) {
         case 'h':
             print_usage();
@@ -96,16 +90,6 @@ static void configure_simulator(int argc, char **argv)
         case 'V':
             print_lvgl_version();
             exit(EXIT_SUCCESS);
-            break;
-        case 'B':
-            driver_backends_print_supported();
-            exit(EXIT_SUCCESS);
-            break;
-        case 'b':
-            if (driver_backends_is_supported(optarg) == 0) {
-                die("error no such backend: %s\n", optarg);
-            }
-            selected_backend = strdup(optarg);
             break;
         case 'W':
             settings.window_width = atoi(optarg);
@@ -125,37 +109,80 @@ static void configure_simulator(int argc, char **argv)
 }
 
 /**
- * @brief entry point
- * @description start a demo
- * @param argc the count of arguments in argv
- * @param argv The arguments
+ * @brief LVGL tick thread function
  */
+static void *tick_thread_cb(void *data)
+{
+    (void)data;
+
+    while (1) {
+        usleep(5000);    /* Sleep for 5 milliseconds */
+        lv_tick_inc(5);  /* Tell LVGL that 5 milliseconds has elapsed */
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief Initialize the tick thread for LVGL timing
+ */
+static void tick_thread_init(void)
+{
+    pthread_t thread;
+    int ret = pthread_create(&thread, NULL, tick_thread_cb, NULL);
+    if (ret != 0) {
+        die("Failed to create tick thread: %s\n", strerror(ret));
+    }
+    pthread_detach(thread);
+}
+
+/**
+ * @brief Initialize LVGL
+ */
+static void lvgl_init(void)
+{
+    /* Initialize LVGL library */
+    lv_init();
+    
+    /* Initialize tick thread for LVGL timing */
+    tick_thread_init();
+}
+
+
 int main(int argc, char **argv)
 {
-
-    configure_simulator(argc, argv);
-
-    /* Initialize LVGL. */
-    lv_init();
-
-    /* Initialize the configured backend */
-    if (driver_backends_init_backend(selected_backend) == -1) {
-        die("Failed to initialize display backend");
+    /* Parse command line arguments */
+    configure(argc, argv);
+    
+    /* Initialize LVGL first */
+    lvgl_init();
+    
+    /* Initialize the SDL display with the configured size */
+    lv_port_disp_init(settings.window_width, settings.window_height);
+    
+    /* Create an SDL mouse input device */
+    lv_indev_t *mouse = lv_sdl_mouse_create();
+    if (!mouse) {
+        fprintf(stderr, "Warning: Failed to create mouse input device\n");
     }
-
-    /* Enable for EVDEV support */
-#if LV_USE_EVDEV
-    if (driver_backends_init_backend("EVDEV") == -1) {
-        die("Failed to initialize evdev");
+    
+    /* Create a Demo */
+    create_ui();
+    
+    /* Main loop */
+    while (1) {
+        /* Handle SDL events */
+        lv_sdl_handle_events();
+        
+        /* Let LVGL do its work */
+        lv_task_handler();
+        
+        /* Sleep a bit to reduce CPU usage */
+        usleep(10000); /* 10ms */
     }
-#endif
-
-    /*Create a Demo*/
-    lv_demo_widgets();
-    lv_demo_widgets_start_slideshow();
-
-    /* Enter the run loop of the selected backend */
-    driver_backends_run_loop();
-
+    
+    /* Clean up resources (never reached in normal execution) */
+    lv_port_disp_deinit();
+    
     return 0;
 }

@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "*.page-template": "vue",
+        "*.layout-template": "vue",
+        "*.vue": "vue",
+        "lv_sdl_disp.h": "c"
+    }
+}
