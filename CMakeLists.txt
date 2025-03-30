@@ -35,6 +35,11 @@ list(APPEND PKG_CONFIG_LIB ${SDL2_LIBRARIES} ${SDL2_IMAGE_LIBRARIES})
 list(APPEND PKG_CONFIG_INC ${SDL2_INCLUDE_DIRS} ${SDL2_IMAGE_INCLUDE_DIRS})
 list(APPEND LV_LINUX_BACKEND_SRC src/lib/lv_sdl_disp.c)
 
+message("Including libcurl support")
+find_package(CURL REQUIRED)
+list(APPEND PKG_CONFIG_LIB ${CURL_LIBRARIES})
+list(APPEND PKG_CONFIG_INC ${CURL_INCLUDE_DIRS})
+
 foreach(arg ${PKG_CONFIG_LIB})
     string(APPEND LVGL_PKG_CONFIG_EXT_LIB " -l${arg}")
 endforeach()

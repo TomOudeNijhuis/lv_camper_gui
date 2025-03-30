@@ -16,7 +16,7 @@ extern "C" {
  * @brief Creates the main application UI
  * @description Creates a tabview with Status, Analytics, and Logs tabs
  */
-void create_status_tab(lv_obj_t *tab_status);
+void create_status_tab(lv_obj_t *left_column);
 
 #ifdef __cplusplus
 }

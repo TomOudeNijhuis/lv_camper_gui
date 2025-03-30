@@ -1,6 +1,7 @@
 Install:
 ```
 git submodule update --init --recursive
+sudo apt-get install libcurl4-openssl-dev
 ```
 
 Build:

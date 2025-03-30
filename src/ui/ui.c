@@ -125,8 +125,47 @@ void create_ui(void)
     lv_obj_t *tab_analytics = lv_tabview_add_tab(tabview, "Analytics");
     lv_obj_t *tab_logs = lv_tabview_add_tab(tabview, "Logs");
     
+    lv_obj_set_style_pad_all(tab_status, 0, 0);
+
+    // Create a horizontal container to hold both columns
+    lv_obj_t *columns_container = lv_obj_create(tab_status);
+    lv_obj_set_size(columns_container, lv_pct(100), lv_pct(100));
+    lv_obj_align(columns_container, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_set_style_border_width(columns_container, 0, 0);
+    lv_obj_set_style_radius(columns_container, 0, 0);
+    lv_obj_set_style_pad_all(columns_container, 0, 0);
+    
+    // Use a row layout for the columns container
+    lv_obj_set_flex_flow(columns_container, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(columns_container, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    
+    // Create left column (50% width)
+    lv_obj_t *left_column = lv_obj_create(columns_container);
+    lv_obj_set_size(left_column, lv_pct(50), lv_pct(100));
+    lv_obj_set_style_border_width(left_column, 0, 0);
+    lv_obj_set_style_radius(left_column, 0, 0);
+    lv_obj_set_style_pad_all(left_column, 10, 0);
+    
+    // Create right column (50% width) - empty for now
+    lv_obj_t *right_column = lv_obj_create(columns_container);
+    lv_obj_set_size(right_column, lv_pct(50), lv_pct(100));
+    lv_obj_set_style_border_width(right_column, 0, 0);
+    lv_obj_set_style_radius(right_column, 0, 0);
+    lv_obj_set_style_pad_all(right_column, 5, 0);
+    
+    // Set up right column as a vertical container (for future content)
+    lv_obj_set_flex_flow(right_column, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(right_column, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(right_column, 8, 0);
+    
+    // Add a placeholder label to the right column
+    lv_obj_t *placeholder = lv_label_create(right_column);
+    lv_label_set_text(placeholder, "Future Content Area");
+    lv_obj_set_style_text_color(placeholder, lv_color_hex(0x888888), 0); // Light gray text
+    lv_obj_align(placeholder, LV_ALIGN_CENTER, 0, 0);
+
     // Create content for each tab
-    create_status_tab(tab_status);
+    create_status_tab(left_column);
     create_analytics_tab(tab_analytics);
     create_logs_tab(tab_logs);
 }
