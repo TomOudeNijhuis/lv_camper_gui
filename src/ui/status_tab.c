@@ -120,14 +120,14 @@ static lv_obj_t* create_battery_gauge(lv_obj_t *parent, const char *title, float
     lv_obj_set_style_border_width(scale_line, 0, 0); // Remove border
 
     // Configure ticks and labels
-    lv_obj_set_style_transform_rotation(scale_line, LV_SCALE_LABEL_ROTATE_MATCH_TICKS | LV_SCALE_LABEL_ROTATE_KEEP_UPRIGHT, LV_PART_INDICATOR);
+    lv_obj_set_style_transform_rotation(scale_line, 450, LV_PART_INDICATOR);
     lv_obj_set_style_translate_x(scale_line, 10, LV_PART_INDICATOR);
     lv_obj_set_style_length(scale_line, 15, LV_PART_INDICATOR);
-    lv_obj_set_style_radial_offset(scale_line, 10, LV_PART_INDICATOR);
-
+    lv_obj_set_style_pad_all(scale_line, 5, LV_PART_INDICATOR);
+    
     // Configure minor ticks
     lv_obj_set_style_length(scale_line, 10, LV_PART_ITEMS);
-    lv_obj_set_style_radial_offset(scale_line, 5, LV_PART_ITEMS);
+    lv_obj_set_style_pad_all(scale_line, 5, LV_PART_ITEMS);
     lv_obj_set_style_line_opa(scale_line, LV_OPA_50, LV_PART_ITEMS);
 
     // Show value labels on the scale

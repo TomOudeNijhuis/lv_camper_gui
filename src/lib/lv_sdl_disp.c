@@ -152,6 +152,38 @@ static void sdl_mouse_read(lv_indev_t * indev, lv_indev_data_t * data)
     data->state = (buttons & SDL_BUTTON(1)) ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
 }
 
+// Touch data structure to store touch state
+typedef struct {
+    bool touched;
+    int16_t last_x;
+    int16_t last_y;
+} touch_data_t;
+
+static touch_data_t touch_data = {0};
+
+// Touch read callback
+static void sdl_touch_read(lv_indev_t * indev, lv_indev_data_t * data)
+{
+    data->point.x = touch_data.last_x;
+    data->point.y = touch_data.last_y;
+    data->state = touch_data.touched ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+}
+
+// Helper function to create an SDL touch input device
+lv_indev_t* lv_sdl_touch_create()
+{
+    // Initialize SDL touch subsystem if needed
+    SDL_InitSubSystem(SDL_INIT_EVENTS);
+    
+    lv_indev_t * touch_indev = lv_indev_create();
+    if(touch_indev == NULL) return NULL;
+    
+    lv_indev_set_type(touch_indev, LV_INDEV_TYPE_POINTER);
+    lv_indev_set_read_cb(touch_indev, sdl_touch_read);
+    
+    return touch_indev;
+}
+
 // Function to handle SDL events (can be called in your main loop)
 void lv_sdl_handle_events()
 {
@@ -161,7 +193,22 @@ void lv_sdl_handle_events()
             case SDL_QUIT:
                 exit(0);
                 break;
-            // Handle other events as needed
+
+            case SDL_FINGERDOWN:
+                touch_data.touched = true;
+                touch_data.last_x = event.tfinger.x * DISPLAY_WIDTH;
+                touch_data.last_y = event.tfinger.y * DISPLAY_HEIGHT;
+                break;
+                
+            case SDL_FINGERUP:
+                touch_data.touched = false;
+                break;
+                
+            case SDL_FINGERMOTION:
+                touch_data.last_x = event.tfinger.x * DISPLAY_WIDTH;
+                touch_data.last_y = event.tfinger.y * DISPLAY_HEIGHT;
+                break;
+
             default:
                 break;
         }

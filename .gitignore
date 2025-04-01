@@ -9,6 +9,7 @@ demo
 *.obj
 *.elf
 /build/
+/build-arm64/
 /bin/
 
 # Linker output

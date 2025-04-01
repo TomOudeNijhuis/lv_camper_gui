@@ -161,11 +161,16 @@ int main(int argc, char **argv)
     lv_port_disp_init(settings.window_width, settings.window_height);
     
     /* Create an SDL mouse input device */
-    lv_indev_t *mouse = lv_sdl_mouse_create();
-    if (!mouse) {
+    lv_indev_t *mouse_indev = lv_sdl_mouse_create();
+    if (!mouse_indev) {
         fprintf(stderr, "Warning: Failed to create mouse input device\n");
     }
     
+    lv_indev_t* touch_indev = lv_sdl_touch_create();
+    if (!touch_indev) {
+        fprintf(stderr, "Warning: Failed to create touch input device\n");
+    }
+
     /* Create a Demo */
     create_ui();
     

@@ -31,6 +31,7 @@ void lv_port_disp_deinit(void);
  * @return pointer to the created input device or NULL on failure
  */
 lv_indev_t* lv_sdl_mouse_create(void);
+lv_indev_t* lv_sdl_touch_create(void);
 
 /**
  * Mouse read callback for LVGL
