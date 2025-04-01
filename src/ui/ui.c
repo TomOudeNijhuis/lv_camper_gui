@@ -5,106 +5,145 @@
  ******************************************************************/
 #include "ui.h"
 #include "status_tab.h"
+#include "logs_tab.h"
+#include "analytics_tab.h"
+#include "../lib/logger.h"
+#include "lvgl/lvgl.h"
+#include <stdlib.h>
+#include <stdbool.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <SDL2/SDL.h>
+
+// Add at the top with other static variables
+static bool is_sleeping = false;
+static lv_obj_t *sleep_overlay = NULL;
+static lv_timer_t *inactivity_timer = NULL;
+#define INACTIVITY_TIMEOUT_MS 30000
+
+extern SDL_Window *window;
+extern SDL_Renderer *renderer;
+
+// Forward declaration
+static void on_wake_event(lv_event_t *e);
+static void inactivity_timer_cb(lv_timer_t *timer);
 
 /**
- * @brief Create Analytics tab content
- * @param tab_analytics Parent tab object
+ * Turn display off using xset DPMS command
  */
-static void create_analytics_tab(lv_obj_t *tab_analytics)
-{
-    // Add content to Analytics tab
-    lv_obj_t *analytics_label = lv_label_create(tab_analytics);
-    lv_label_set_text(analytics_label, "Energy & Resource Analytics");
-    lv_obj_align(analytics_label, LV_ALIGN_TOP_MID, 0, 20);
+static void display_power_off(void) {
+    log_debug("Turning off display");
     
-    // Create a chart
-    lv_obj_t *chart = lv_chart_create(tab_analytics);
-    lv_obj_set_size(chart, lv_pct(90), lv_pct(60));
-    lv_obj_align(chart, LV_ALIGN_CENTER, 0, 0);
-    lv_chart_set_type(chart, LV_CHART_TYPE_LINE);
-    lv_chart_set_range(chart, LV_CHART_AXIS_PRIMARY_Y, 0, 100);
-    lv_chart_set_point_count(chart, 12);
-    lv_chart_set_div_line_count(chart, 5, 5);
-    
-    // Add series to the chart
-    lv_chart_series_t *ser1 = lv_chart_add_series(chart, lv_palette_main(LV_PALETTE_RED), LV_CHART_AXIS_PRIMARY_Y);
-    lv_chart_series_t *ser2 = lv_chart_add_series(chart, lv_palette_main(LV_PALETTE_BLUE), LV_CHART_AXIS_PRIMARY_Y);
-    
-    // Set sample data
-    for (int i = 0; i < 12; i++) {
-        lv_chart_set_next_value(chart, ser1, lv_rand(10, 90));
-        lv_chart_set_next_value(chart, ser2, lv_rand(10, 90));
-    }
-    
-    // Add legend
-    lv_obj_t *legend_container = lv_obj_create(tab_analytics);
-    lv_obj_set_size(legend_container, lv_pct(90), 40);
-    lv_obj_align(legend_container, LV_ALIGN_BOTTOM_MID, 0, -20);
-    lv_obj_set_flex_flow(legend_container, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(legend_container, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(legend_container, 5, 0);
-    
-    // Legend items
-    lv_obj_t *legend_item1 = lv_obj_create(legend_container);
-    lv_obj_set_size(legend_item1, 120, 30);
-    lv_obj_t *legend_color1 = lv_obj_create(legend_item1);
-    lv_obj_set_size(legend_color1, 15, 15);
-    lv_obj_set_style_bg_color(legend_color1, lv_palette_main(LV_PALETTE_RED), 0);
-    lv_obj_align(legend_color1, LV_ALIGN_LEFT_MID, 5, 0);
-    lv_obj_t *legend_text1 = lv_label_create(legend_item1);
-    lv_label_set_text(legend_text1, "Battery");
-    lv_obj_align(legend_text1, LV_ALIGN_LEFT_MID, 30, 0);
-    
-    lv_obj_t *legend_item2 = lv_obj_create(legend_container);
-    lv_obj_set_size(legend_item2, 120, 30);
-    lv_obj_t *legend_color2 = lv_obj_create(legend_item2);
-    lv_obj_set_size(legend_color2, 15, 15);
-    lv_obj_set_style_bg_color(legend_color2, lv_palette_main(LV_PALETTE_BLUE), 0);
-    lv_obj_align(legend_color2, LV_ALIGN_LEFT_MID, 5, 0);
-    lv_obj_t *legend_text2 = lv_label_create(legend_item2);
-    lv_label_set_text(legend_text2, "Solar");
-    lv_obj_align(legend_text2, LV_ALIGN_LEFT_MID, 30, 0);
+    // Configure SDL for power saving
+    SDL_SetHint(SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "1");
+    SDL_EnableScreenSaver();
 }
 
 /**
- * @brief Create Logs tab content
- * @param tab_logs Parent tab object
+ * Turn display on using xset DPMS command
  */
-static void create_logs_tab(lv_obj_t *tab_logs)
-{
-    // Add content to Logs tab
-    lv_obj_t *logs_label = lv_label_create(tab_logs);
-    lv_label_set_text(logs_label, "System Logs");
-    lv_obj_align(logs_label, LV_ALIGN_TOP_MID, 0, 20);
+static void display_power_on(void) {
+    log_debug("Turning on display");
+
+    // Restore power management
+    SDL_SetHint(SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "0");
+    SDL_DisableScreenSaver();
+}
+
+/**
+ * Enter sleep mode - turn off display
+ */
+void ui_enter_sleep_mode(void) {
+    if (is_sleeping) return;  // Already in sleep mode
     
-    // Create a text area for logs
-    lv_obj_t *ta = lv_textarea_create(tab_logs);
-    lv_obj_set_size(ta, lv_pct(90), lv_pct(70));
-    lv_obj_align(ta, LV_ALIGN_CENTER, 0, 10);
-    lv_textarea_set_placeholder_text(ta, "System logs will appear here...");
-    lv_textarea_set_one_line(ta, false);
-    lv_obj_set_style_text_align(ta, LV_TEXT_ALIGN_LEFT, 0);
+    log_info("Entering sleep mode");
+    is_sleeping = true;
     
-    // Add some example log entries
-    const char *log_entries = 
-        "10:15:23 System started\n"
-        "10:15:24 Battery status: Good\n"
-        "10:15:25 WiFi connected\n"
-        "10:15:30 Water sensor initialized\n"
-        "10:16:05 Solar panel connected\n"
-        "10:17:12 Temperature: Indoor 22°C, Outdoor 18°C\n"
-        "10:20:45 Battery charging from solar: 250W\n"
-        "10:25:33 Water tank level: 60%\n";
+    // Create a black overlay with "touch to wake" text
+    sleep_overlay = lv_obj_create(lv_screen_active());
+    lv_obj_set_size(sleep_overlay, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_color(sleep_overlay, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(sleep_overlay, 255, 0);  // Fully opaque
+    lv_obj_set_style_border_width(sleep_overlay, 0, 0);
+    lv_obj_set_style_radius(sleep_overlay, 0, 0);
     
-    lv_textarea_set_text(ta, log_entries);
+    // Add "touch to wake" text
+    lv_obj_t *hint_label = lv_label_create(sleep_overlay);
+    lv_label_set_text(hint_label, "Touch to wake");
+    lv_obj_set_style_text_color(hint_label, lv_color_white(), 0);
+    lv_obj_center(hint_label);
     
-    // Add a refresh button
-    lv_obj_t *refresh_btn = lv_btn_create(tab_logs);
-    lv_obj_set_size(refresh_btn, 120, 40);
-    lv_obj_align(refresh_btn, LV_ALIGN_BOTTOM_MID, 0, -20);
-    lv_obj_t *refresh_label = lv_label_create(refresh_btn);
-    lv_label_set_text(refresh_label, "Refresh");
-    lv_obj_center(refresh_label);
+    // Add event callback to wake on touch
+    lv_obj_add_event_cb(sleep_overlay, on_wake_event, LV_EVENT_PRESSED, NULL);
+    
+    // Force immediate redraw to show overlay before turning off display
+    lv_refr_now(NULL);
+    
+    // Now turn off the display using DPMS
+    display_power_off();
+}
+
+/**
+ * Exit sleep mode - turn on display
+ */
+void ui_exit_sleep_mode(void) {
+    if (!is_sleeping) return;  // Not in sleep mode
+    
+    log_info("Exiting sleep mode");
+    
+    // Turn on the display
+    display_power_on();
+    
+    // Remove the sleep overlay
+    if (sleep_overlay) {
+        lv_obj_del(sleep_overlay);
+        sleep_overlay = NULL;
+    }
+    
+    is_sleeping = false;
+    
+    // Reset inactivity timer
+    if (inactivity_timer) {
+        lv_timer_reset(inactivity_timer);
+    }
+}
+
+/**
+ * Check if display is in sleep mode
+ */
+bool ui_is_sleeping(void) {
+    return is_sleeping;
+}
+
+/**
+ * Event handler for wake event
+ */
+static void on_wake_event(lv_event_t *e) {
+    ui_exit_sleep_mode();
+}
+
+/**
+ * Inactivity timer callback
+ */
+static void inactivity_timer_cb(lv_timer_t *timer) {
+    if (!is_sleeping) {
+        ui_enter_sleep_mode();
+    }
+}
+
+// Update your sleep button handler
+static void sleep_button_event_handler(lv_event_t *e) {
+    if (is_sleeping) {
+        ui_exit_sleep_mode();
+    } else {
+        ui_enter_sleep_mode();
+    }
+}
+
+static void exit_button_event_handler(lv_event_t *e) {
+    log_info("Exit button pressed, shutting down application");
+    // Exit the application
+    exit(0);
 }
 
 /**
@@ -125,6 +164,44 @@ void create_ui(void)
     lv_obj_t *tab_analytics = lv_tabview_add_tab(tabview, "Analytics");
     lv_obj_t *tab_logs = lv_tabview_add_tab(tabview, "Logs");
     
+    // Get the tab bar (btns container)
+    lv_obj_t *tab_btns = lv_tabview_get_tab_btns(tabview);
+    
+    // Create a sleep button
+    lv_obj_t *sleep_btn = lv_btn_create(tab_btns);
+    lv_obj_set_width(sleep_btn, 50);
+    lv_obj_set_height(sleep_btn, LV_PCT(100));
+    lv_obj_align(sleep_btn, LV_ALIGN_RIGHT_MID, -60, 0); 
+    lv_obj_set_style_radius(sleep_btn, 0, 0);
+    lv_obj_set_style_bg_color(sleep_btn, lv_color_hex(0x3366CC), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(sleep_btn, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(sleep_btn, lv_color_hex(0x1A478F), LV_PART_MAIN | LV_STATE_PRESSED);
+
+    lv_obj_t *sleep_label = lv_label_create(sleep_btn);
+    lv_label_set_text(sleep_label, LV_SYMBOL_POWER); 
+    lv_obj_center(sleep_label);
+
+    // Add event handler for sleep button
+    lv_obj_add_event_cb(sleep_btn, sleep_button_event_handler, LV_EVENT_CLICKED, NULL);
+
+    // Create an exit button
+    lv_obj_t *exit_btn = lv_btn_create(tab_btns);
+    lv_obj_set_width(exit_btn, 50);
+    lv_obj_set_height(exit_btn, LV_PCT(100));
+    lv_obj_align(exit_btn, LV_ALIGN_RIGHT_MID, -5, 0);
+    lv_obj_set_style_radius(exit_btn, 0, 0);
+    lv_obj_set_style_bg_color(exit_btn, lv_color_hex(0xFF0000), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(exit_btn, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(exit_btn, lv_color_hex(0xCC0000), LV_PART_MAIN | LV_STATE_PRESSED);
+    
+    // Add exit icon
+    lv_obj_t *exit_label = lv_label_create(exit_btn);
+    lv_label_set_text(exit_label, LV_SYMBOL_CLOSE);
+    lv_obj_center(exit_label);
+    
+    // Add event handler for exit button
+    lv_obj_add_event_cb(exit_btn, exit_button_event_handler, LV_EVENT_CLICKED, NULL);
+
     lv_obj_set_style_pad_all(tab_status, 0, 0);
 
     // Create a horizontal container to hold both columns
@@ -168,4 +245,7 @@ void create_ui(void)
     create_status_tab(left_column);
     create_analytics_tab(tab_analytics);
     create_logs_tab(tab_logs);
+
+    // Create inactivity timer to automatically enter sleep mode
+    inactivity_timer = lv_timer_create(inactivity_timer_cb, INACTIVITY_TIMEOUT_MS, NULL);
 }

@@ -16,8 +16,10 @@
 
 #include "lvgl/lvgl.h"
 #include "lvgl/demos/lv_demos.h"
-#include "./lib/lv_sdl_disp.h"
+#include "lib/lv_sdl_disp.h"
 #include "ui/ui.h" 
+#include "lib/logger.h"
+#include "lib/http_client.h"
 
 /* Simulator settings */
 typedef struct {
@@ -91,19 +93,13 @@ static void configure(int argc, char **argv)
             print_lvgl_version();
             exit(EXIT_SUCCESS);
             break;
-        case 'W':
-            settings.window_width = atoi(optarg);
-            break;
-        case 'H':
-            settings.window_height = atoi(optarg);
-            break;
         case ':':
             print_usage();
-            die("Option -%c requires an argument.\n", optopt);
+            die("Option -%c requires an argument.\n", opt);
             break;
         case '?':
             print_usage();
-            die("Unknown option -%c.\n", optopt);
+            die("Unknown option -%c.\n", opt);
         }
     }
 }
@@ -146,6 +142,8 @@ static void lvgl_init(void)
     
     /* Initialize tick thread for LVGL timing */
     tick_thread_init();
+
+    log_debug("LVGL initialized");
 }
 
 
@@ -154,21 +152,27 @@ int main(int argc, char **argv)
     /* Parse command line arguments */
     configure(argc, argv);
     
+    /* Initialize logger */
+    logger_init();
+    log_info("Application starting");
+
+    http_client_init();
+
     /* Initialize LVGL first */
     lvgl_init();
-    
+
     /* Initialize the SDL display with the configured size */
     lv_port_disp_init(settings.window_width, settings.window_height);
     
     /* Create an SDL mouse input device */
     lv_indev_t *mouse_indev = lv_sdl_mouse_create();
     if (!mouse_indev) {
-        fprintf(stderr, "Warning: Failed to create mouse input device\n");
+        log_error("Failed to create mouse input device.");
     }
     
     lv_indev_t* touch_indev = lv_sdl_touch_create();
     if (!touch_indev) {
-        fprintf(stderr, "Warning: Failed to create touch input device\n");
+        log_error("Warning: Failed to create touch input device.");
     }
 
     /* Create a Demo */
@@ -182,8 +186,12 @@ int main(int argc, char **argv)
         /* Let LVGL do its work */
         lv_task_handler();
         
-        /* Sleep a bit to reduce CPU usage */
-        usleep(10000); /* 10ms */
+        /* Sleep more when display is off to reduce CPU usage */
+        if (ui_is_sleeping()) {
+            SDL_Delay(100);  // 100ms delay when sleeping
+        } else {
+            SDL_Delay(5);    // Normal 5ms delay
+        }
     }
     
     /* Clean up resources (never reached in normal execution) */

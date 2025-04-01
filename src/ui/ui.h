@@ -17,6 +17,9 @@ extern "C" {
  * @description Creates a tabview with Status, Analytics, and Logs tabs
  */
 void create_ui(void);
+void ui_enter_sleep_mode(void);
+void ui_exit_sleep_mode(void);
+bool ui_is_sleeping(void);
 
 #ifdef __cplusplus
 }

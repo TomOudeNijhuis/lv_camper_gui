@@ -8,46 +8,33 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h> 
+#include "../lib/logger.h"
+#include "../lib/http_client.h"
 
+// Updated function in status_tab.c
 static int set_household_switch_status(const char *url, const char *status) {
-    CURL *curl;
-    CURLcode res;
-    int result = 0;
-
-    // Initialize libcurl
-    curl = curl_easy_init();
-    if (!curl) {
-        fprintf(stderr, "Failed to initialize libcurl\n");
-        return 1;
-    }
-
     // Prepare the JSON payload
     char json_payload[128];
     snprintf(json_payload, sizeof(json_payload), "{\"switch_status\": \"%s\"}", status);
-
-    // Set the URL
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-
-    // Set the HTTP headers
-    struct curl_slist *headers = NULL;
-    headers = curl_slist_append(headers, "Content-Type: application/json");
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-
-    // Set the POST data
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_payload);
-
-    // Perform the request
-    res = curl_easy_perform(curl);
-    if (res != CURLE_OK) {
-        fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-        result = 1;
+    
+    // Make the POST request
+    http_response_t response = http_post_json(url, json_payload, 10);
+    
+    // Log the result
+    if (!response.success) {
+        log_error("Failed to update switch status: %s", response.error);
+        if (response.body && *response.body) {
+            log_error("Response body: %s", response.body);
+        }
+    } else {
+        log_info("Switch status updated successfully");
+        log_debug("Response: %s", response.body);
     }
-
-    // Clean up
-    curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
-
-    return result;
+    
+    // Free the response
+    http_response_free(&response);
+    
+    return response.success ? 0 : 1;
 }
 
 static void household_event_handler(lv_event_t *e)
@@ -56,12 +43,12 @@ static void household_event_handler(lv_event_t *e)
     bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
 
     const char *status = checked ? "ON" : "OFF";
-    printf("Household switch changed to: %s\n", status);
+    log_info("Household switch changed to: %s", status);
     
     // Send the API request
     const char *api_url = "http://example.com/api/household_switch";
     if (set_household_switch_status(api_url, status) != 0) {
-        fprintf(stderr, "Failed to update household switch status via API\n");
+        log_error("Failed to update household switch status via API");
     }
 }
 
@@ -70,7 +57,7 @@ static void pump_event_handler(lv_event_t *e)
     lv_obj_t *sw = lv_event_get_target(e);
     bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
     
-    printf("Pump switch changed to: %s\n", checked ? "ON" : "OFF");
+    log_info("Pump switch changed to: %s", checked ? "ON" : "OFF");
     
     // Here you would add the actual API call or functionality
     // If checked is true, the switch is ON; if false, it's OFF
@@ -94,8 +81,15 @@ static void update_battery_gauge(lv_obj_t *scale_line, lv_obj_t *needle_line, fl
 }
 
 static lv_obj_t* create_battery_gauge(lv_obj_t *parent, const char *title, float voltage) {
+    lv_obj_t *starter_container = lv_obj_create(parent);
+    lv_obj_set_size(starter_container, lv_pct(48), lv_pct(95));
+    lv_obj_set_style_pad_all(starter_container, 0, 0);
+    lv_obj_set_style_border_width(starter_container, 0, 0);
+    lv_obj_set_style_radius(starter_container, 0, 0); 
+    lv_obj_set_style_bg_opa(starter_container, LV_OPA_TRANSP, 0);
+
     // Create a container for the title and scale
-    lv_obj_t *gauge_container = lv_obj_create(parent);
+    lv_obj_t *gauge_container = lv_obj_create(starter_container);
     lv_obj_set_size(gauge_container, lv_pct(100), lv_pct(100));
     lv_obj_set_style_pad_all(gauge_container, 0, 0); // Remove padding
     lv_obj_set_style_border_width(gauge_container, 0, 0); // Remove border
@@ -155,6 +149,48 @@ static lv_obj_t* create_battery_gauge(lv_obj_t *parent, const char *title, float
     return scale_line;
 }
 
+static lv_obj_t* create_level_bar(lv_obj_t *parent, const char *label_text, int initial_value, lv_color_t color) {
+    // Create container with padding
+    lv_obj_t *container = lv_obj_create(parent);
+    lv_obj_set_size(container, lv_pct(100), LV_SIZE_CONTENT); 
+    lv_obj_set_style_pad_top(container, 15, 0);
+    lv_obj_set_style_pad_bottom(container, 15, 0);
+    lv_obj_set_style_border_width(container, 0, 0);
+    lv_obj_set_style_bg_opa(container, LV_OPA_TRANSP, 0);
+    lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    // Add label
+    lv_obj_t *label = lv_label_create(container);
+    lv_label_set_text(label, label_text);
+    
+    // Create styles for the bar
+    lv_style_t *style_bar_bg = malloc(sizeof(lv_style_t));
+    lv_style_t *style_bar_indic = malloc(sizeof(lv_style_t));
+
+    lv_style_init(style_bar_bg);
+    lv_style_set_border_color(style_bar_bg, color); 
+    lv_style_set_border_width(style_bar_bg, 2);
+    lv_style_set_pad_all(style_bar_bg, 6);
+    lv_style_set_radius(style_bar_bg, 6); 
+
+    lv_style_init(style_bar_indic);
+    lv_style_set_bg_opa(style_bar_indic, LV_OPA_COVER); 
+    lv_style_set_bg_color(style_bar_indic, color); 
+    lv_style_set_radius(style_bar_indic, 3);
+
+    // Create the bar
+    lv_obj_t *bar = lv_bar_create(container);
+    lv_obj_remove_style_all(bar);
+    lv_obj_add_style(bar, style_bar_bg, 0); 
+    lv_obj_add_style(bar, style_bar_indic, LV_PART_INDICATOR);
+    lv_obj_set_size(bar, lv_pct(100), 30);  
+    lv_bar_set_range(bar, 0, 100); 
+    lv_bar_set_value(bar, initial_value, LV_ANIM_OFF);
+
+    return bar;
+}
+
 void create_status_tab(lv_obj_t *left_column)
 {
     // Set up left column as a vertical container
@@ -164,18 +200,18 @@ void create_status_tab(lv_obj_t *left_column)
 
     // Create a container for the household switch, pump switch, and mains LED
     lv_obj_t *status_row_container = lv_obj_create(left_column);
-    lv_obj_set_size(status_row_container, lv_pct(100), 80); // Adjust height as needed
-    lv_obj_set_style_border_width(status_row_container, 0, 0); // Remove border
+    lv_obj_set_size(status_row_container, lv_pct(100), 80);
+    lv_obj_set_style_border_width(status_row_container, 0, 0);
     lv_obj_set_style_pad_all(status_row_container, 5, 0);
-    lv_obj_set_flex_flow(status_row_container, LV_FLEX_FLOW_ROW); // Horizontal layout
+    lv_obj_set_flex_flow(status_row_container, LV_FLEX_FLOW_ROW); 
     lv_obj_set_flex_align(status_row_container, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
     // Household switch with label
     lv_obj_t *household_container = lv_obj_create(status_row_container);
-    lv_obj_set_size(household_container, lv_pct(30), lv_pct(100)); // Adjust size as needed
-    lv_obj_set_style_border_width(household_container, 0, 0); // Remove border
+    lv_obj_set_size(household_container, lv_pct(30), lv_pct(100));
+    lv_obj_set_style_border_width(household_container, 0, 0);
     lv_obj_set_style_pad_all(household_container, 5, 0);
-    lv_obj_set_flex_flow(household_container, LV_FLEX_FLOW_COLUMN); // Vertical layout
+    lv_obj_set_flex_flow(household_container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(household_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
     lv_obj_t *household_label = lv_label_create(household_container);
@@ -205,10 +241,10 @@ void create_status_tab(lv_obj_t *left_column)
 
     // Mains LED with label
     lv_obj_t *mains_container = lv_obj_create(status_row_container);
-    lv_obj_set_size(mains_container, lv_pct(30), lv_pct(100)); // Adjust size as needed
-    lv_obj_set_style_border_width(mains_container, 0, 0); // Remove border
+    lv_obj_set_size(mains_container, lv_pct(30), lv_pct(100)); 
+    lv_obj_set_style_border_width(mains_container, 0, 0);
     lv_obj_set_style_pad_all(mains_container, 5, 0);
-    lv_obj_set_flex_flow(mains_container, LV_FLEX_FLOW_COLUMN); // Vertical layout
+    lv_obj_set_flex_flow(mains_container, LV_FLEX_FLOW_COLUMN); 
     lv_obj_set_flex_align(mains_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
     lv_obj_t *mains_label = lv_label_create(mains_container);
@@ -218,48 +254,13 @@ void create_status_tab(lv_obj_t *left_column)
     lv_obj_t *mains_led = lv_led_create(mains_container);
     lv_obj_set_size(mains_led, 20, 20);
     lv_led_set_color(mains_led, lv_color_hex(0x808080)); // Gray for unknown status
-    lv_led_set_brightness(mains_led, 255); // Full brightness
-    lv_led_on(mains_led); // Turn LED on
+    lv_led_set_brightness(mains_led, 255);
+    lv_led_off(mains_led);
     
-    // Define styles for the bars
-    static lv_style_t style_bar_bg;
-    static lv_style_t style_bar_indic;
-
-    lv_style_init(&style_bar_bg);
-    lv_style_set_border_color(&style_bar_bg, lv_palette_main(LV_PALETTE_BLUE)); // Border color
-    lv_style_set_border_width(&style_bar_bg, 2);                               // Border width
-    lv_style_set_pad_all(&style_bar_bg, 6);                                    // Padding to make the indicator smaller
-    lv_style_set_radius(&style_bar_bg, 6);                                     // Rounded corners
-
-    lv_style_init(&style_bar_indic);
-    lv_style_set_bg_opa(&style_bar_indic, LV_OPA_COVER);                       // Indicator opacity
-    lv_style_set_bg_color(&style_bar_indic, lv_palette_main(LV_PALETTE_BLUE)); // Indicator color
-    lv_style_set_radius(&style_bar_indic, 3);                                  // Rounded corners for the indicator
-
-    // Water level bar
-    lv_obj_t *water_label = lv_label_create(left_column);
-    lv_label_set_text(water_label, "Fresh Water");
-
-    lv_obj_t *water_bar = lv_bar_create(left_column);
-    lv_obj_remove_style_all(water_bar); // Remove all default styles
-    lv_obj_add_style(water_bar, &style_bar_bg, 0); // Apply background style
-    lv_obj_add_style(water_bar, &style_bar_indic, LV_PART_INDICATOR); // Apply indicator style
-    lv_obj_set_size(water_bar, lv_pct(100), 30);
-    lv_bar_set_range(water_bar, 0, 100);
-    lv_bar_set_value(water_bar, 60, LV_ANIM_OFF); // Example value
-
-    // Waste level bar
-    lv_obj_t *waste_label = lv_label_create(left_column);
-    lv_label_set_text(waste_label, "Waste Water");
-
-    lv_obj_t *waste_bar = lv_bar_create(left_column);
-    lv_obj_remove_style_all(waste_bar); // Remove all default styles
-    lv_obj_add_style(waste_bar, &style_bar_bg, 0); // Apply background style
-    lv_obj_add_style(waste_bar, &style_bar_indic, LV_PART_INDICATOR); // Apply indicator style
-    lv_obj_set_size(waste_bar, lv_pct(100), 30);
-    lv_bar_set_range(waste_bar, 0, 100);
-    lv_bar_set_value(waste_bar, 40, LV_ANIM_OFF); // Example value
-
+    // Create water and waste bars with appropriate colors
+    lv_obj_t *water_bar = create_level_bar(left_column, "Fresh Water", 60, lv_palette_main(LV_PALETTE_BLUE));
+    lv_obj_t *waste_bar = create_level_bar(left_column, "Waste Water", 40, lv_palette_main(LV_PALETTE_ORANGE));
+ 
     // Create a container for voltage info with row layout
     lv_obj_t *voltage_container = lv_obj_create(left_column);
     lv_obj_set_size(voltage_container, lv_pct(100), 180);
@@ -270,23 +271,7 @@ void create_status_tab(lv_obj_t *left_column)
     lv_obj_set_flex_flow(voltage_container, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(voltage_container, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // Create starter container (left side)
-    lv_obj_t *starter_container = lv_obj_create(voltage_container);
-    lv_obj_set_size(starter_container, lv_pct(48), lv_pct(95));
-    lv_obj_set_style_pad_all(starter_container, 0, 0); // Remove padding
-    lv_obj_set_style_border_width(starter_container, 0, 0); // Remove border
-    lv_obj_set_style_radius(starter_container, 0, 0); // Remove radius
-    lv_obj_set_style_bg_opa(starter_container, LV_OPA_TRANSP, 0); // Transparent background
-
-    // Create household container
-    lv_obj_t *household_v_container = lv_obj_create(voltage_container);
-    lv_obj_set_size(household_v_container, lv_pct(48), lv_pct(95));
-    lv_obj_set_style_pad_all(household_v_container, 0, 0); // Remove padding
-    lv_obj_set_style_border_width(household_v_container, 0, 0); // Remove border
-    lv_obj_set_style_radius(household_v_container, 0, 0); // Remove radius
-    lv_obj_set_style_bg_opa(household_v_container, LV_OPA_TRANSP, 0); // Transparent background
-
     // Create battery gauges using our new function
-    lv_obj_t *starter_scale = create_battery_gauge(starter_container, "Starter Battery", 12.6);
-    lv_obj_t *household_scale = create_battery_gauge(household_v_container, "Household Battery", 12.4);
+    lv_obj_t *starter_scale = create_battery_gauge(voltage_container, "Starter Battery", 12.6);
+    lv_obj_t *household_scale = create_battery_gauge(voltage_container, "Household Battery", 12.4);
 }

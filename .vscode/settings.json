@@ -3,6 +3,8 @@
         "*.page-template": "vue",
         "*.layout-template": "vue",
         "*.vue": "vue",
-        "lv_sdl_disp.h": "c"
+        "lv_sdl_disp.h": "c",
+        "lvgl.h": "c",
+        "lv_demos.h": "c"
     }
 }

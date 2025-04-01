@@ -5,6 +5,7 @@
 
 #include "lv_sdl_disp.h"
 #include "lvgl/lvgl.h"
+#include "../ui/ui.h" 
 
 static void *fb1, *fb2;
 SDL_Window *window = NULL;
@@ -211,6 +212,16 @@ void lv_sdl_handle_events()
 
             default:
                 break;
+        }
+
+        if (ui_is_sleeping()) {
+            if (event.type == SDL_KEYDOWN || 
+                event.type == SDL_MOUSEMOTION ||
+                event.type == SDL_MOUSEBUTTONDOWN ||
+                event.type == SDL_FINGERDOWN) {
+                ui_exit_sleep_mode();
+                continue;  // Skip further processing
+            }
         }
     }
 }
