@@ -1,8 +1,18 @@
 //SPDX-License-Identifier: MIT
 
 #include <assert.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
 #include <SDL2/SDL.h>
-
+#include <SDL2/SDL_syswm.h>
+// #include <drm_fourcc.h>
+#include <xf86drm.h>
+#include <xf86drmMode.h>
+// #include <drm_mode.h> 
+#include <errno.h>
 #include "lv_sdl_disp.h"
 #include "lvgl/lvgl.h"
 #include "../ui/ui.h" 
@@ -34,18 +44,194 @@ static void disp_flush(lv_display_t * disp, const lv_area_t * area, uint8_t * px
     lv_display_flush_ready(disp);
 }
 
+void printWMInfo(SDL_Window *window) {
+    SDL_SysWMinfo wmInfo;
+    SDL_VERSION(&wmInfo.version); // Initialize the SDL version field
+
+    if (!SDL_GetWindowWMInfo(window, &wmInfo)) {
+        printf("Failed to get SDL window manager info: %s\n", SDL_GetError());
+        return;
+    }
+
+    printf("SDL Window Manager Info:\n");
+
+    switch (wmInfo.subsystem) {
+        case SDL_SYSWM_UNKNOWN: 
+            printf("  Subsystem: Unknown\n");
+            break;
+        case SDL_SYSWM_X11: 
+            printf("  Subsystem: X11\n");
+            printf("  Display: %p\n", (void*)wmInfo.info.x11.display);
+            printf("  Window: %lu\n", (unsigned long)wmInfo.info.x11.window);
+            break;
+        case SDL_SYSWM_WAYLAND: 
+            printf("  Subsystem: Wayland\n");
+            printf("  Display: %p\n", (void*)wmInfo.info.wl.display);
+            printf("  Surface: %p\n", (void*)wmInfo.info.wl.surface);
+            break;
+        case SDL_SYSWM_DIRECTFB: 
+            printf("  Subsystem: DirectFB\n");
+            break;
+        case SDL_SYSWM_COCOA: 
+            printf("  Subsystem: macOS (Cocoa)\n");
+            break;
+        case SDL_SYSWM_UIKIT: 
+            printf("  Subsystem: iOS (UIKit)\n");
+            break;
+        case SDL_SYSWM_ANDROID: 
+            printf("  Subsystem: Android\n");
+            break;
+        case SDL_SYSWM_VIVANTE:
+            printf("  Subsystem: Vivante\n");
+            break;
+        case SDL_SYSWM_OS2:
+            printf("  Subsystem: OS/2\n");
+            break;
+        case SDL_SYSWM_KMSDRM:
+            printf("  Subsystem: KMS/DRM\n");
+            printf("  DRM Device File Descriptor: %d\n", wmInfo.info.kmsdrm.dev_index);
+            printf("  DRM File Descriptor: %d\n", wmInfo.info.kmsdrm.drm_fd);
+            break;
+        default:
+            printf("  Subsystem: Other\n");
+            break;
+    }
+}
+
+/**
+ * Get the KMS/DRM file descriptor from SDL's window
+ * Must be called after SDL_CreateWindow(...).
+ */
+static int get_sdl_drm_fd(SDL_Window *window)
+{
+    SDL_SysWMinfo wmInfo;
+    SDL_VERSION(&wmInfo.version);
+
+    if(!SDL_GetWindowWMInfo(window, &wmInfo)) {
+        fprintf(stderr, "SDL_GetWindowWMInfo failed: %s\n", SDL_GetError());
+        return -1;
+    }
+
+    if(wmInfo.subsystem != SDL_SYSWM_KMSDRM) {
+        fprintf(stderr, "SDL is not using KMSDRM backend.\n");
+        return -1;
+    }
+
+    // The fd SDL is using under the KMS/DRM backend
+    return wmInfo.info.kmsdrm.drm_fd;
+}
+
+/**
+ * Find the DPMS property ID for a given connector
+ */
+static uint32_t find_dpms_property_id(int drm_fd, drmModeConnector *conn)
+{
+    drmModeObjectProperties *props =
+        drmModeObjectGetProperties(drm_fd, conn->connector_id, DRM_MODE_OBJECT_CONNECTOR);
+    if(!props) {
+        fprintf(stderr, "drmModeObjectGetProperties failed: %s\n", strerror(errno));
+        return 0;
+    }
+
+    // Search properties for “DPMS”
+    uint32_t dpms_prop_id = 0;
+    for (uint32_t i = 0; i < props->count_props; i++) {
+        drmModePropertyRes *prop = drmModeGetProperty(drm_fd, props->props[i]);
+        if(prop) {
+            if(strcmp(prop->name, "DPMS") == 0) {
+                dpms_prop_id = prop->prop_id;
+                drmModeFreeProperty(prop);
+                break;
+            }
+            drmModeFreeProperty(prop);
+        }
+    }
+
+    drmModeFreeObjectProperties(props);
+    return dpms_prop_id;
+}
+
+/**
+ * Blank/unblank the connector by setting DPMS
+ * drm_fd : already-open DRM file descriptor (from SDL)
+ * off    : 1 to blank, 0 to unblank
+ * returns 0 on success, -1 on failure
+ */
+static int drm_set_dpms(int drm_fd, drmModeConnector *conn, int off)
+{
+    uint32_t dpms_prop_id = find_dpms_property_id(drm_fd, conn);
+    if(dpms_prop_id == 0) {
+        fprintf(stderr, "DPMS property not found on connector %u\n", conn->connector_id);
+        return -1;
+    }
+
+    // DRM_MODE_DPMS_OFF == 3, DRM_MODE_DPMS_ON == 0
+    uint64_t dpms_val = off ? 3 : 0;
+    int ret = drmModeConnectorSetProperty(drm_fd, conn->connector_id, dpms_prop_id, dpms_val);
+    if(ret != 0) {
+        fprintf(stderr, "Failed to set DPMS property to %s on connector %u: %s (err=%d)\n",
+                off ? "OFF" : "ON", conn->connector_id, strerror(errno), ret);
+        return -1;
+    }
+    return 0;
+}
+
+/**
+ * Blank the display using the same DRM file descriptor SDL is using.
+ */
+int drm_blank_display(SDL_Window *window, int blank)
+{
+    int drm_fd = get_sdl_drm_fd(window);
+    if(drm_fd < 0) {
+        return -1;
+    }
+
+    drmModeRes *res = drmModeGetResources(drm_fd);
+    if(!res) {
+        fprintf(stderr, "drmModeGetResources failed: %s\n", strerror(errno));
+        return -1;
+    }
+
+    int i;
+    int rv = -1;
+    // Try all connectors
+    for(i = 0; i < res->count_connectors; i++) {
+        drmModeConnector *conn = drmModeGetConnector(drm_fd, res->connectors[i]);
+        if(!conn) continue;
+
+        if(conn->connection == DRM_MODE_CONNECTED && conn->count_modes > 0) {
+            // Found an active connector, set DPMS
+            if(drm_set_dpms(drm_fd, conn, blank) == 0) {
+                rv = 0; // success
+            }
+        }
+        drmModeFreeConnector(conn);
+    }
+
+    drmModeFreeResources(res);
+    return rv;
+}
+
 void lv_port_disp_init(int width, int height)
 {
+    // setenv("SDL_VIDEODRIVER", "kmsdrm", 1);
+
     assert(LV_COLOR_DEPTH == 16 || LV_COLOR_DEPTH == 32);
     DISPLAY_WIDTH = width;
     DISPLAY_HEIGHT = height;
-    SDL_InitSubSystem(SDL_INIT_VIDEO);
+    
+    if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
+        fprintf(stderr, "SDL_InitSubSystem failed: %s\n", SDL_GetError());
+        exit(1);
+    }
 
     window = SDL_CreateWindow(WINDOW_NAME,
                               SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
                               DISPLAY_WIDTH, DISPLAY_HEIGHT, 0);
+    
+    printWMInfo(window);
 
-    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 
     texture = SDL_CreateTexture(renderer,
                                 (LV_COLOR_DEPTH == 32) ? (SDL_PIXELFORMAT_ARGB8888) : (SDL_PIXELFORMAT_RGB565),
@@ -100,6 +286,7 @@ void lv_port_disp_init(int width, int height)
         lv_display_set_color_format(display, LV_COLOR_FORMAT_RGB565);
     }
 }
+
 void lv_port_disp_deinit()
 {
     if(fb1) {

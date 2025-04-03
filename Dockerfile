@@ -22,6 +22,7 @@ RUN dpkg --add-architecture arm64 && \
     libsdl2-dev:arm64 \
     libsdl2-image-dev:arm64 \
     libevdev-dev:arm64 \
+    libdrm-dev:arm64 \
     pkg-config:arm64 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*

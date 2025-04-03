@@ -9,6 +9,8 @@
 #include "analytics_tab.h"
 #include "../lib/logger.h"
 #include "lvgl/lvgl.h"
+#include "../lib/lv_sdl_disp.h"
+
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h>
@@ -29,7 +31,7 @@ static void on_wake_event(lv_event_t *e);
 static void inactivity_timer_cb(lv_timer_t *timer);
 
 /**
- * Turn display off using xset DPMS command
+ * Turn display off using
  */
 static void display_power_off(void) {
     log_debug("Turning off display");
@@ -37,13 +39,23 @@ static void display_power_off(void) {
     // Configure SDL for power saving
     SDL_SetHint(SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "1");
     SDL_EnableScreenSaver();
+
+    int rv = drm_blank_display(window, 1);
+    if(rv != 0) {
+        log_error("Turning on display", rv);
+    }
 }
 
 /**
- * Turn display on using xset DPMS command
+ * Turn display on
  */
 static void display_power_on(void) {
     log_debug("Turning on display");
+
+    int rv = drm_blank_display(window, 0);
+    if(rv != 0) {
+        log_error("Turning on display", rv);
+    }
 
     // Restore power management
     SDL_SetHint(SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "0");

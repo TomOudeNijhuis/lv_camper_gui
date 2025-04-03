@@ -20,11 +20,9 @@ extern SDL_Texture *texture;
  * @param height display height in pixels
  */
 void lv_port_disp_init(int width, int height);
-
-/**
- * De-initialize the SDL display
- */
 void lv_port_disp_deinit(void);
+
+int drm_blank_display(SDL_Window *window, int blank);
 
 /**
  * Create an SDL mouse input device

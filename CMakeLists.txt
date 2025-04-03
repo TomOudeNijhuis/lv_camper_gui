@@ -35,6 +35,12 @@ list(APPEND PKG_CONFIG_LIB ${SDL2_LIBRARIES} ${SDL2_IMAGE_LIBRARIES})
 list(APPEND PKG_CONFIG_INC ${SDL2_INCLUDE_DIRS} ${SDL2_IMAGE_INCLUDE_DIRS})
 list(APPEND LV_LINUX_BACKEND_SRC src/lib/lv_sdl_disp.c)
 
+message("Including DRM support")
+pkg_check_modules(DRM REQUIRED libdrm)
+include_directories(${DRM_INCLUDE_DIRS})
+list(APPEND PKG_CONFIG_LIB ${DRM_LIBRARIES})
+list(APPEND PKG_CONFIG_INC ${DRM_INCLUDE_DIRS})
+
 message("Including libcurl support")
 find_package(CURL REQUIRED)
 list(APPEND PKG_CONFIG_LIB ${CURL_LIBRARIES})
