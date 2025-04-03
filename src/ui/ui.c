@@ -42,7 +42,7 @@ static void display_power_off(void) {
 
     int rv = drm_blank_display(window, 1);
     if(rv != 0) {
-        log_error("Turning on display", rv);
+        log_error("Error turning off display", rv);
     }
 }
 
@@ -54,7 +54,7 @@ static void display_power_on(void) {
 
     int rv = drm_blank_display(window, 0);
     if(rv != 0) {
-        log_error("Turning on display", rv);
+        log_error("Error turning on display", rv);
     }
 
     // Restore power management
