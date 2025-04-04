@@ -39,12 +39,12 @@ Run:
 
 Build ARM64:
 ```bash
-docker compose run cross-build
+docker compose run --remove-orphans cross-build 
 ```
 
 with shell:
 ```bash
-docker compose run cross-shell
+docker compose run cross-shell --remove-orphans
 ```
 
 inside container:

@@ -355,7 +355,7 @@ int drm_blank_display(SDL_Window *window, int blank)
         if (conn->connection == DRM_MODE_CONNECTED && conn->count_modes > 0) {
             // Found an active connector, set DPMS
             if (drm_set_dpms(drm_fd, conn, blank) == 0) {
-                rv = 0; // success
+                rv = 0;
             }
         }
         drmModeFreeConnector(conn);

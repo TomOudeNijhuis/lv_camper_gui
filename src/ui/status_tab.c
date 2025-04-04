@@ -10,6 +10,7 @@
 #include <stdio.h> 
 #include "../lib/logger.h"
 #include "../lib/http_client.h"
+#include "lvgl/lvgl.h"
 
 // Updated function in status_tab.c
 static int set_household_switch_status(const char *url, const char *status) {
@@ -78,75 +79,112 @@ static void update_battery_gauge(lv_obj_t *scale_line, lv_obj_t *needle_line, fl
         // Good - green
         lv_obj_set_style_line_color(needle_line, lv_color_hex(0x00C853), 0);
     }
+
+    // Retrieve label pointer from the scale's user data
+    lv_obj_t *voltage_label = lv_obj_get_user_data(scale_line);
+    if(voltage_label) {
+        // Update the text to show current voltage
+        lv_label_set_text_fmt(voltage_label, "%.1fV", voltage);
+    }
 }
 
 static lv_obj_t* create_battery_gauge(lv_obj_t *parent, const char *title, float voltage) {
-    lv_obj_t *starter_container = lv_obj_create(parent);
-    lv_obj_set_size(starter_container, lv_pct(48), lv_pct(95));
-    lv_obj_set_style_pad_all(starter_container, 0, 0);
-    lv_obj_set_style_border_width(starter_container, 0, 0);
-    lv_obj_set_style_radius(starter_container, 0, 0); 
-    lv_obj_set_style_bg_opa(starter_container, LV_OPA_TRANSP, 0);
+    // Create a container for everything
+    lv_obj_t *gauge_container = lv_obj_create(parent);
+    lv_obj_set_size(gauge_container, lv_pct(48), 180);
+    lv_obj_set_style_bg_opa(gauge_container, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(gauge_container, 0, 0);
+    lv_obj_set_scrollbar_mode(gauge_container, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(gauge_container, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Create a container for the title and scale
-    lv_obj_t *gauge_container = lv_obj_create(starter_container);
-    lv_obj_set_size(gauge_container, lv_pct(100), lv_pct(100));
-    lv_obj_set_style_pad_all(gauge_container, 0, 0); // Remove padding
-    lv_obj_set_style_border_width(gauge_container, 0, 0); // Remove border
-    lv_obj_set_style_bg_opa(gauge_container, LV_OPA_TRANSP, 0); // Transparent background
-    lv_obj_set_flex_flow(gauge_container, LV_FLEX_FLOW_COLUMN); // Vertical layout
-    lv_obj_set_flex_align(gauge_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    // Use absolute positioning in this container
+    lv_obj_set_layout(gauge_container, LV_LAYOUT_NONE);
 
-    // Add title label
+    // Add a title label near the top
     lv_obj_t *title_label = lv_label_create(gauge_container);
     lv_label_set_text(title_label, title);
     lv_obj_set_style_text_font(title_label, &lv_font_montserrat_16, 0);
-    lv_obj_align(title_label, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_align(title_label, LV_ALIGN_TOP_MID, 0, -10);
 
     // Create the scale
     lv_obj_t *scale_line = lv_scale_create(gauge_container);
-    lv_obj_set_size(scale_line, 130, 130); // Adjust size to fit the container
-    lv_obj_center(scale_line); // Center the scale in the container
+    lv_obj_set_size(scale_line, 130, 130);
+    lv_obj_align(scale_line, LV_ALIGN_CENTER, 0, 10);
 
-    // Configure the scale
+    // Configure the scale (as before)
     lv_scale_set_mode(scale_line, LV_SCALE_MODE_ROUND_INNER);
-    lv_obj_set_style_bg_opa(scale_line, LV_OPA_TRANSP, 0); // Transparent background
-    lv_obj_set_style_border_width(scale_line, 0, 0); // Remove border
+    lv_obj_set_style_bg_opa(scale_line, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(scale_line, 0, 0);
 
     // Configure ticks and labels
     lv_obj_set_style_transform_rotation(scale_line, 450, LV_PART_INDICATOR);
     lv_obj_set_style_translate_x(scale_line, 10, LV_PART_INDICATOR);
     lv_obj_set_style_length(scale_line, 15, LV_PART_INDICATOR);
     lv_obj_set_style_pad_all(scale_line, 5, LV_PART_INDICATOR);
-    
-    // Configure minor ticks
     lv_obj_set_style_length(scale_line, 10, LV_PART_ITEMS);
     lv_obj_set_style_pad_all(scale_line, 5, LV_PART_ITEMS);
     lv_obj_set_style_line_opa(scale_line, LV_OPA_50, LV_PART_ITEMS);
-
-    // Show value labels on the scale
     lv_scale_set_label_show(scale_line, true);
-
-    // Configure ticks and range
     lv_scale_set_total_tick_count(scale_line, 11);
     lv_scale_set_major_tick_every(scale_line, 2);
     lv_scale_set_range(scale_line, 90, 140);
-    
     static const char *custom_labels[] = {"9", "10", "11", "12", "13", "14", NULL};
     lv_scale_set_text_src(scale_line, custom_labels);
-
-    // Set scale rotation and angle range
     lv_scale_set_angle_range(scale_line, 270);
     lv_scale_set_rotation(scale_line, 135);
 
-    // Create a needle for the current value
+    // Create styles & sections (same as before)
+    static lv_style_t style_section_red;
+    static lv_style_t style_section_orange;
+    static lv_style_t style_section_green;
+
+    lv_style_init(&style_section_red);
+    lv_style_set_arc_color(&style_section_red, lv_color_hex(0xFF0000));
+    lv_style_set_arc_width(&style_section_red, 3);
+
+    lv_style_init(&style_section_orange);
+    lv_style_set_arc_color(&style_section_orange, lv_color_hex(0xFF8000));
+    lv_style_set_arc_width(&style_section_orange, 3);
+
+    lv_style_init(&style_section_green);
+    lv_style_set_arc_color(&style_section_green, lv_color_hex(0x00C853));
+    lv_style_set_arc_width(&style_section_green, 3);
+
+    lv_scale_section_t *section1 = lv_scale_add_section(scale_line);
+    lv_scale_section_set_range(section1, 90, 110);
+    lv_scale_section_set_style(section1, LV_PART_MAIN, &style_section_red);
+
+    lv_scale_section_t *section2 = lv_scale_add_section(scale_line);
+    lv_scale_section_set_range(section2, 110, 118);
+    lv_scale_section_set_style(section2, LV_PART_MAIN, &style_section_orange);
+
+    lv_scale_section_t *section3 = lv_scale_add_section(scale_line);
+    lv_scale_section_set_range(section3, 118, 140);
+    lv_scale_section_set_style(section3, LV_PART_MAIN, &style_section_green);
+
+    lv_obj_set_style_arc_rounded(scale_line, true, LV_PART_MAIN);
+
+    // Create the needle
     lv_obj_t *needle_line = lv_line_create(scale_line);
     lv_obj_set_style_line_width(needle_line, 3, LV_PART_MAIN);
     lv_obj_set_style_line_rounded(needle_line, true, LV_PART_MAIN);
 
+    // Create the voltage label
+    lv_obj_t *voltage_label = lv_label_create(gauge_container);
+    lv_label_set_text_fmt(voltage_label, "%.1fV", voltage);
+    lv_obj_set_style_text_font(voltage_label, &lv_font_montserrat_16, 0);
+
+    // Align the voltage label so it appears on the missing portion (top) of the arc
+    // Adjust the final (y) offset as needed
+    lv_obj_align_to(voltage_label, scale_line, LV_ALIGN_CENTER, 0, +55);
+
+    // Store the label pointer so we can update it later
+    lv_obj_set_user_data(scale_line, voltage_label);
+
+    // Initialize the gauge to the correct voltage
     update_battery_gauge(scale_line, needle_line, voltage);
 
-    return scale_line;
+    return gauge_container;
 }
 
 static lv_obj_t* create_level_bar(lv_obj_t *parent, const char *label_text, int initial_value, lv_color_t color) {
@@ -266,6 +304,8 @@ void create_status_tab(lv_obj_t *left_column)
     lv_obj_set_size(voltage_container, lv_pct(100), 180);
     lv_obj_set_style_pad_all(voltage_container, 3, 0);
     lv_obj_set_style_border_width(voltage_container, 0, 0);
+    lv_obj_set_scrollbar_mode(voltage_container, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(voltage_container, LV_OBJ_FLAG_SCROLLABLE);
 
     // Use a row layout for voltages - this places containers side by side
     lv_obj_set_flex_flow(voltage_container, LV_FLEX_FLOW_ROW);

@@ -33,7 +33,7 @@ static void inactivity_timer_cb(lv_timer_t *timer);
 /**
  * Turn display off using
  */
-static void display_power_off(void) {
+static int display_power_off(void) {
     log_debug("Turning off display");
     
     // Configure SDL for power saving
@@ -44,6 +44,7 @@ static void display_power_off(void) {
     if(rv != 0) {
         log_error("Error turning off display", rv);
     }
+    return rv;
 }
 
 /**
@@ -54,7 +55,7 @@ static void display_power_on(void) {
 
     int rv = drm_blank_display(window, 0);
     if(rv != 0) {
-        log_error("Error turning on display", rv);
+        log_error("Error turning on display %d", rv);
     }
 
     // Restore power management
@@ -92,7 +93,9 @@ void ui_enter_sleep_mode(void) {
     lv_refr_now(NULL);
     
     // Now turn off the display using DPMS
-    display_power_off();
+    if (display_power_off() != 0) {
+        lv_label_set_text(hint_label, "Cannot turn off display using KMSDRM DPMS property");
+    }
 }
 
 /**

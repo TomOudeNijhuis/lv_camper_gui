@@ -6,6 +6,7 @@
         "lv_sdl_disp.h": "c",
         "lvgl.h": "c",
         "lv_demos.h": "c",
-        "sdl_syswm.h": "c"
+        "sdl_syswm.h": "c",
+        "analytics_tab.h": "c"
     }
 }
