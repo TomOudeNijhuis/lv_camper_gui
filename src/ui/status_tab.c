@@ -11,32 +11,17 @@
 #include "../lib/logger.h"
 #include "../lib/http_client.h"
 #include "lvgl/lvgl.h"
+#include "camper_data.h"
 
-// Updated function in status_tab.c
-static int set_household_switch_status(const char *url, const char *status) {
-    // Prepare the JSON payload
-    char json_payload[128];
-    snprintf(json_payload, sizeof(json_payload), "{\"switch_status\": \"%s\"}", status);
-    
-    // Make the POST request
-    http_response_t response = http_post_json(url, json_payload, 10);
-    
-    // Log the result
-    if (!response.success) {
-        log_error("Failed to update switch status: %s", response.error);
-        if (response.body && *response.body) {
-            log_error("Response body: %s", response.body);
-        }
-    } else {
-        log_info("Switch status updated successfully");
-        log_debug("Response: %s", response.body);
-    }
-    
-    // Free the response
-    http_response_free(&response);
-    
-    return response.success ? 0 : 1;
-}
+static lv_obj_t *ui_household_switch = NULL;
+static lv_obj_t *ui_pump_switch = NULL;
+static lv_obj_t *ui_mains_led = NULL;
+static lv_obj_t *ui_water_bar = NULL;
+static lv_obj_t *ui_waste_bar = NULL;
+static lv_obj_t *ui_starter_battery = NULL;
+static lv_obj_t *ui_starter_battery_needle = NULL;
+static lv_obj_t *ui_household_battery = NULL;
+static lv_obj_t *ui_household_battery_needle = NULL;
 
 static void household_event_handler(lv_event_t *e)
 {
@@ -47,9 +32,8 @@ static void household_event_handler(lv_event_t *e)
     log_info("Household switch changed to: %s", status);
     
     // Send the API request
-    const char *api_url = "http://example.com/api/household_switch";
-    if (set_household_switch_status(api_url, status) != 0) {
-        log_error("Failed to update household switch status via API");
+    if (set_camper_action(20, status) != 0) {
+        log_error("Failed to update household switch via API");
     }
 }
 
@@ -57,14 +41,31 @@ static void pump_event_handler(lv_event_t *e)
 {
     lv_obj_t *sw = lv_event_get_target(e);
     bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
-    
+
+    const char *status = checked ? "ON" : "OFF";
     log_info("Pump switch changed to: %s", checked ? "ON" : "OFF");
     
-    // Here you would add the actual API call or functionality
-    // If checked is true, the switch is ON; if false, it's OFF
+    // Send the API request
+    if (set_camper_action(23, status) != 0) {
+        log_error("Failed to update pump switch via API");
+    }
 }
 
 static void update_battery_gauge(lv_obj_t *scale_line, lv_obj_t *needle_line, float voltage) {
+    lv_obj_t *voltage_label = lv_obj_get_user_data(scale_line);
+
+    // Hide the needle when voltage is 0 (invalid/missing reading)
+    if (voltage <= 1.0f) {
+        lv_obj_add_flag(needle_line, LV_OBJ_FLAG_HIDDEN);
+
+        if(voltage_label) {
+            lv_label_set_text(voltage_label, "-----");
+        }
+        return;
+    } else {
+        lv_obj_clear_flag(needle_line, LV_OBJ_FLAG_HIDDEN);
+    }
+
     // Set the needle to show the current voltage
     lv_scale_set_line_needle_value(scale_line, needle_line, 60, voltage*10);
 
@@ -80,15 +81,13 @@ static void update_battery_gauge(lv_obj_t *scale_line, lv_obj_t *needle_line, fl
         lv_obj_set_style_line_color(needle_line, lv_color_hex(0x00C853), 0);
     }
 
-    // Retrieve label pointer from the scale's user data
-    lv_obj_t *voltage_label = lv_obj_get_user_data(scale_line);
     if(voltage_label) {
         // Update the text to show current voltage
         lv_label_set_text_fmt(voltage_label, "%.1fV", voltage);
     }
 }
 
-static lv_obj_t* create_battery_gauge(lv_obj_t *parent, const char *title, float voltage) {
+static lv_obj_t* create_battery_gauge(lv_obj_t *parent, const char *title, float voltage, lv_obj_t **out_needle) {
     // Create a container for everything
     lv_obj_t *gauge_container = lv_obj_create(parent);
     lv_obj_set_size(gauge_container, lv_pct(48), 180);
@@ -137,18 +136,23 @@ static lv_obj_t* create_battery_gauge(lv_obj_t *parent, const char *title, float
     static lv_style_t style_section_red;
     static lv_style_t style_section_orange;
     static lv_style_t style_section_green;
+    static bool styles_initialized = false;
 
-    lv_style_init(&style_section_red);
-    lv_style_set_arc_color(&style_section_red, lv_color_hex(0xFF0000));
-    lv_style_set_arc_width(&style_section_red, 3);
+    if (!styles_initialized) {
+        lv_style_init(&style_section_red);
+        lv_style_set_arc_color(&style_section_red, lv_color_hex(0xFF0000));
+        lv_style_set_arc_width(&style_section_red, 3);
 
-    lv_style_init(&style_section_orange);
-    lv_style_set_arc_color(&style_section_orange, lv_color_hex(0xFF8000));
-    lv_style_set_arc_width(&style_section_orange, 3);
+        lv_style_init(&style_section_orange);
+        lv_style_set_arc_color(&style_section_orange, lv_color_hex(0xFF8000));
+        lv_style_set_arc_width(&style_section_orange, 3);
 
-    lv_style_init(&style_section_green);
-    lv_style_set_arc_color(&style_section_green, lv_color_hex(0x00C853));
-    lv_style_set_arc_width(&style_section_green, 3);
+        lv_style_init(&style_section_green);
+        lv_style_set_arc_color(&style_section_green, lv_color_hex(0x00C853));
+        lv_style_set_arc_width(&style_section_green, 3);
+
+        styles_initialized = true;
+    }
 
     lv_scale_section_t *section1 = lv_scale_add_section(scale_line);
     lv_scale_section_set_range(section1, 90, 110);
@@ -168,6 +172,7 @@ static lv_obj_t* create_battery_gauge(lv_obj_t *parent, const char *title, float
     lv_obj_t *needle_line = lv_line_create(scale_line);
     lv_obj_set_style_line_width(needle_line, 3, LV_PART_MAIN);
     lv_obj_set_style_line_rounded(needle_line, true, LV_PART_MAIN);
+    *out_needle = needle_line;
 
     // Create the voltage label
     lv_obj_t *voltage_label = lv_label_create(gauge_container);
@@ -176,7 +181,7 @@ static lv_obj_t* create_battery_gauge(lv_obj_t *parent, const char *title, float
 
     // Align the voltage label so it appears on the missing portion (top) of the arc
     // Adjust the final (y) offset as needed
-    lv_obj_align_to(voltage_label, scale_line, LV_ALIGN_CENTER, 0, +55);
+    lv_obj_align_to(voltage_label, scale_line, LV_ALIGN_CENTER, 0, 55);
 
     // Store the label pointer so we can update it later
     lv_obj_set_user_data(scale_line, voltage_label);
@@ -184,7 +189,7 @@ static lv_obj_t* create_battery_gauge(lv_obj_t *parent, const char *title, float
     // Initialize the gauge to the correct voltage
     update_battery_gauge(scale_line, needle_line, voltage);
 
-    return gauge_container;
+    return scale_line;
 }
 
 static lv_obj_t* create_level_bar(lv_obj_t *parent, const char *label_text, int initial_value, lv_color_t color) {
@@ -257,16 +262,15 @@ void create_status_tab(lv_obj_t *left_column)
     lv_obj_set_style_text_font(household_label, &lv_font_montserrat_16, 0);
 
     lv_obj_t *household_switch = lv_switch_create(household_container);
-    lv_obj_add_state(household_switch, LV_STATE_CHECKED); // Default to ON
-    lv_obj_set_style_bg_color(household_switch, lv_color_hex(0x008800), LV_PART_INDICATOR | LV_STATE_CHECKED); // Green when ON
+    lv_obj_set_style_bg_color(household_switch, lv_color_hex(0x008800), LV_PART_INDICATOR | LV_STATE_CHECKED);
     lv_obj_add_event_cb(household_switch, household_event_handler, LV_EVENT_VALUE_CHANGED, NULL);
 
     // Pump switch with label
     lv_obj_t *pump_container = lv_obj_create(status_row_container);
-    lv_obj_set_size(pump_container, lv_pct(30), lv_pct(100)); // Adjust size as needed
-    lv_obj_set_style_border_width(pump_container, 0, 0); // Remove border
+    lv_obj_set_size(pump_container, lv_pct(30), lv_pct(100));
+    lv_obj_set_style_border_width(pump_container, 0, 0);
     lv_obj_set_style_pad_all(pump_container, 5, 0);
-    lv_obj_set_flex_flow(pump_container, LV_FLEX_FLOW_COLUMN); // Vertical layout
+    lv_obj_set_flex_flow(pump_container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(pump_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
     lv_obj_t *pump_label = lv_label_create(pump_container);
@@ -274,7 +278,7 @@ void create_status_tab(lv_obj_t *left_column)
     lv_obj_set_style_text_font(pump_label, &lv_font_montserrat_16, 0);
 
     lv_obj_t *pump_switch = lv_switch_create(pump_container);
-    lv_obj_set_style_bg_color(pump_switch, lv_color_hex(0x008800), LV_PART_INDICATOR | LV_STATE_CHECKED); // Green when ON
+    lv_obj_set_style_bg_color(pump_switch, lv_color_hex(0x008800), LV_PART_INDICATOR | LV_STATE_CHECKED);
     lv_obj_add_event_cb(pump_switch, pump_event_handler, LV_EVENT_VALUE_CHANGED, NULL);
 
     // Mains LED with label
@@ -296,8 +300,8 @@ void create_status_tab(lv_obj_t *left_column)
     lv_led_off(mains_led);
     
     // Create water and waste bars with appropriate colors
-    lv_obj_t *water_bar = create_level_bar(left_column, "Fresh Water", 60, lv_palette_main(LV_PALETTE_BLUE));
-    lv_obj_t *waste_bar = create_level_bar(left_column, "Waste Water", 40, lv_palette_main(LV_PALETTE_ORANGE));
+    lv_obj_t *water_bar = create_level_bar(left_column, "Fresh Water", 0, lv_palette_main(LV_PALETTE_BLUE));
+    lv_obj_t *waste_bar = create_level_bar(left_column, "Waste Water", 0, lv_palette_main(LV_PALETTE_ORANGE));
  
     // Create a container for voltage info with row layout
     lv_obj_t *voltage_container = lv_obj_create(left_column);
@@ -311,7 +315,73 @@ void create_status_tab(lv_obj_t *left_column)
     lv_obj_set_flex_flow(voltage_container, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(voltage_container, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // Create battery gauges using our new function
-    lv_obj_t *starter_scale = create_battery_gauge(voltage_container, "Starter Battery", 12.6);
-    lv_obj_t *household_scale = create_battery_gauge(voltage_container, "Household Battery", 12.4);
+    ui_household_switch = household_switch;
+    ui_pump_switch = pump_switch;
+    ui_mains_led = mains_led;
+    ui_water_bar = water_bar;
+    ui_waste_bar = waste_bar;
+    
+    // Store references to battery gauges
+    ui_starter_battery = create_battery_gauge(voltage_container, "Starter Voltage", 0, &ui_starter_battery_needle);
+    ui_household_battery = create_battery_gauge(voltage_container, "Household Voltage", 0, &ui_household_battery_needle);
+}
+
+void update_status_ui(camper_sensor_t *camper_data)
+{
+    // Update household switch
+    if (ui_household_switch) {
+        bool current_state = lv_obj_has_state(ui_household_switch, LV_STATE_CHECKED);
+        if (current_state != camper_data->household_state) {
+            if (camper_data->household_state) {
+                lv_obj_add_state(ui_household_switch, LV_STATE_CHECKED);
+            } else {
+                lv_obj_clear_state(ui_household_switch, LV_STATE_CHECKED);
+            }
+        }
+    }
+
+    // Update pump switch
+    if (ui_pump_switch) {
+        bool current_state = lv_obj_has_state(ui_pump_switch, LV_STATE_CHECKED);
+        if (current_state != camper_data->pump_state) {
+            if (camper_data->pump_state) {
+                lv_obj_add_state(ui_pump_switch, LV_STATE_CHECKED);
+            } else {
+                lv_obj_clear_state(ui_pump_switch, LV_STATE_CHECKED);
+            }
+        }
+    }
+
+    // Update mains LED
+    if (ui_mains_led) {
+        // Mains is detected if voltage is above 200V (assuming European 230V system)
+        if (camper_data->mains_voltage > 200.0f) {
+            lv_led_on(ui_mains_led);
+            lv_led_set_color(ui_mains_led, lv_color_hex(0x00FF00)); // Green when mains connected
+        } else {
+            lv_led_off(ui_mains_led);
+            lv_led_set_color(ui_mains_led, lv_color_hex(0x808080)); // Gray when disconnected
+        }
+    }
+
+    // Update water level bar (placeholder values - replace with actual sensing values)
+    if (ui_water_bar) {
+        // Assuming water_state in the range 0-100 indicates fill level percentage
+        lv_bar_set_value(ui_water_bar, camper_data->water_state ? 100 : 0, LV_ANIM_ON);
+    }
+
+    // Update waste level bar (placeholder values - replace with actual sensing values)
+    if (ui_waste_bar) {
+        // Assuming waste_state in the range 0-100 indicates fill level percentage
+        lv_bar_set_value(ui_waste_bar, camper_data->waste_state ? 100 : 0, LV_ANIM_ON);
+    }
+
+    // Update battery gauges
+    if (ui_starter_battery && ui_starter_battery_needle) {
+        update_battery_gauge(ui_starter_battery, ui_starter_battery_needle, camper_data->starter_voltage);
+    }
+
+    if (ui_household_battery && ui_household_battery_needle) {
+        update_battery_gauge(ui_household_battery, ui_household_battery_needle, camper_data->household_voltage);
+    }
 }

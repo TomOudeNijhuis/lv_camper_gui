@@ -22,9 +22,10 @@
 static bool is_sleeping = false;
 static lv_obj_t *sleep_overlay = NULL;
 static lv_timer_t *inactivity_timer = NULL;
+static lv_timer_t *update_timer = NULL;
 
 #define INACTIVITY_TIMEOUT_MS 30000
-#define DATA_UPDATE_INTERVAL_MS 5000 // 5 seconds
+#define DATA_UPDATE_INTERVAL_MS 10000
 extern SDL_Window *window;
 extern SDL_Renderer *renderer;
 
@@ -32,6 +33,7 @@ extern SDL_Renderer *renderer;
 // Forward declaration
 static void on_wake_event(lv_event_t *e);
 static void inactivity_timer_cb(lv_timer_t *timer);
+static void data_update_timer_cb(lv_timer_t *timer);
 
 /**
  * Turn display off using
@@ -152,11 +154,14 @@ static void inactivity_timer_cb(lv_timer_t *timer) {
  * Timer callback for data updates
  */
 static void data_update_timer_cb(lv_timer_t *timer) {
+    camper_sensor_t *camper_data;
+
     if(!ui_is_sleeping()) {
-        if(fetch_system_data() == 0) {
-            // update_ui_with_data();
+        if(fetch_camper_data() == 0) {
+            camper_data = get_camper_data();
+            update_status_ui(camper_data);
         } else {
-            log_error("Failed to fetch system data");
+            log_error("Failed to fetch camper data");
         }
     }
 }
@@ -278,5 +283,5 @@ void create_ui(void)
 
     // Create inactivity timer to automatically enter sleep mode
     inactivity_timer = lv_timer_create(inactivity_timer_cb, INACTIVITY_TIMEOUT_MS, NULL);
-    
+    update_timer = lv_timer_create(data_update_timer_cb, DATA_UPDATE_INTERVAL_MS, NULL);
 }
