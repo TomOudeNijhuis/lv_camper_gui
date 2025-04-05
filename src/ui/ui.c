@@ -6,6 +6,7 @@
 #include "ui.h"
 #include "status_tab.h"
 #include "logs_tab.h"
+#include "camper_data.h"
 #include "analytics_tab.h"
 #include "../lib/logger.h"
 #include "lvgl/lvgl.h"
@@ -21,10 +22,12 @@
 static bool is_sleeping = false;
 static lv_obj_t *sleep_overlay = NULL;
 static lv_timer_t *inactivity_timer = NULL;
-#define INACTIVITY_TIMEOUT_MS 30000
 
+#define INACTIVITY_TIMEOUT_MS 30000
+#define DATA_UPDATE_INTERVAL_MS 5000 // 5 seconds
 extern SDL_Window *window;
 extern SDL_Renderer *renderer;
+
 
 // Forward declaration
 static void on_wake_event(lv_event_t *e);
@@ -102,7 +105,11 @@ void ui_enter_sleep_mode(void) {
  * Exit sleep mode - turn on display
  */
 void ui_exit_sleep_mode(void) {
-    if (!is_sleeping) return;  // Not in sleep mode
+    if (inactivity_timer) {
+        lv_timer_reset(inactivity_timer);
+    }
+
+    if (!is_sleeping) return;
     
     log_info("Exiting sleep mode");
     
@@ -116,11 +123,6 @@ void ui_exit_sleep_mode(void) {
     }
     
     is_sleeping = false;
-    
-    // Reset inactivity timer
-    if (inactivity_timer) {
-        lv_timer_reset(inactivity_timer);
-    }
 }
 
 /**
@@ -143,6 +145,19 @@ static void on_wake_event(lv_event_t *e) {
 static void inactivity_timer_cb(lv_timer_t *timer) {
     if (!is_sleeping) {
         ui_enter_sleep_mode();
+    }
+}
+
+/**
+ * Timer callback for data updates
+ */
+static void data_update_timer_cb(lv_timer_t *timer) {
+    if(!ui_is_sleeping()) {
+        if(fetch_system_data() == 0) {
+            // update_ui_with_data();
+        } else {
+            log_error("Failed to fetch system data");
+        }
     }
 }
 
@@ -263,4 +278,5 @@ void create_ui(void)
 
     // Create inactivity timer to automatically enter sleep mode
     inactivity_timer = lv_timer_create(inactivity_timer_cb, INACTIVITY_TIMEOUT_MS, NULL);
+    
 }

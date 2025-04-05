@@ -1,4 +1,4 @@
-FROM debian:bookworm
+FROM debian:bookworm-slim
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
@@ -23,6 +23,7 @@ RUN dpkg --add-architecture arm64 && \
     libsdl2-image-dev:arm64 \
     libevdev-dev:arm64 \
     libdrm-dev:arm64 \
+    libjson-c-dev:arm64 \
     pkg-config:arm64 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -42,6 +43,13 @@ RUN echo '#!/bin/bash' > /usr/local/bin/find-curl && \
 echo 'echo CURL_INCLUDE_DIR=/usr/include/aarch64-linux-gnu' >> /usr/local/bin/find-curl && \
 echo 'echo CURL_LIBRARY=/usr/lib/aarch64-linux-gnu/libcurl.so' >> /usr/local/bin/find-curl && \
 chmod +x /usr/local/bin/find-curl
+
+# Create find-jsonc script to help CMake locate ARM64 json-c
+RUN echo '#!/bin/bash' > /usr/local/bin/find-jsonc && \
+echo 'echo JSONC_INCLUDE_DIRS=/usr/include/aarch64-linux-gnu/json-c' >> /usr/local/bin/find-jsonc && \
+echo 'echo JSONC_LIBRARIES=/usr/lib/aarch64-linux-gnu/libjson-c.so' >> /usr/local/bin/find-jsonc && \
+chmod +x /usr/local/bin/find-jsonc
+
 
 # Create working directory
 WORKDIR /app

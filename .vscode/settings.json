@@ -7,6 +7,10 @@
         "lvgl.h": "c",
         "lv_demos.h": "c",
         "sdl_syswm.h": "c",
-        "analytics_tab.h": "c"
+        "analytics_tab.h": "c",
+        "logger.h": "c",
+        "array": "c",
+        "string": "c",
+        "string_view": "c"
     }
 }

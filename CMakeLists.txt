@@ -46,6 +46,11 @@ find_package(CURL REQUIRED)
 list(APPEND PKG_CONFIG_LIB ${CURL_LIBRARIES})
 list(APPEND PKG_CONFIG_INC ${CURL_INCLUDE_DIRS})
 
+message("Including JSON-C support")
+pkg_check_modules(JSONC REQUIRED json-c)
+list(APPEND PKG_CONFIG_LIB ${JSONC_LIBRARIES})
+list(APPEND PKG_CONFIG_INC ${JSONC_INCLUDE_DIRS})
+
 foreach(arg ${PKG_CONFIG_LIB})
     string(APPEND LVGL_PKG_CONFIG_EXT_LIB " -l${arg}")
 endforeach()

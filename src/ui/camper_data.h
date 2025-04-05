@@ -1,21 +1,19 @@
 /*******************************************************************
  *
- * analytics_tab.h - User interface definitions for the Camper GUI
+ * camper_data.h - User interface definitions for the Camper GUI
  *
  ******************************************************************/
-#ifndef ANALYTICS_TAB_H
-#define ANALYTICS_TAB_H
-
-#include "lvgl/lvgl.h"
+#ifndef CAMPER_DATA_H
+#define CAMPER_DATA_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-void create_analytics_tab(lv_obj_t *parent);
+int fetch_system_data(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* ANALYTICS_TAB_H */
+#endif /* CAMPER_DATA_H */

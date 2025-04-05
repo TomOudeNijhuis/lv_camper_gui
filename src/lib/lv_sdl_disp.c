@@ -98,7 +98,7 @@ void lv_port_disp_init(int width, int height)
     
     printWMInfo(window);
 
-    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
     if (!renderer) {
         fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
         exit(1);
@@ -463,7 +463,7 @@ void lv_sdl_handle_events(void)
                 event.type == SDL_MOUSEBUTTONDOWN ||
                 event.type == SDL_FINGERDOWN) {
                 ui_exit_sleep_mode();
-                continue;  // Skip further processing
+                continue;
             }
         }
     }

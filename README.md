@@ -5,6 +5,8 @@ git submodule update --init --recursive
 sudo apt-get install libcurl4-openssl-dev
 apt-get install -y make cmake build-essential
 apt-get install -y libsdl2-dev libsdl2-image-dev
+sudo apt-get install libjson-c-dev
+
 ```
  to cross:
 ```bash
