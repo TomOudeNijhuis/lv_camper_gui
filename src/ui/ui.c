@@ -151,6 +151,15 @@ static void inactivity_timer_cb(lv_timer_t *timer) {
 }
 
 /**
+ * Reset the inactivity timer
+ */
+void ui_reset_inactivity_timer(void) {
+    if (inactivity_timer) {
+        lv_timer_reset(inactivity_timer);
+    }
+}
+
+/**
  * Timer callback for data updates
  */
 static void data_update_timer_cb(lv_timer_t *timer) {

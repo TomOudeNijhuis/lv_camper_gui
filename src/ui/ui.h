@@ -21,6 +21,11 @@ void ui_enter_sleep_mode(void);
 void ui_exit_sleep_mode(void);
 bool ui_is_sleeping(void);
 
+/**
+ * Reset the inactivity timer
+ */
+void ui_reset_inactivity_timer(void);
+
 #ifdef __cplusplus
 }
 #endif
