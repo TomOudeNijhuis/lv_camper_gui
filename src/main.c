@@ -20,7 +20,7 @@
 #include "ui/ui.h" 
 #include "lib/logger.h"
 #include "lib/http_client.h"
-#include "ui/camper_data.h"
+#include "data/data_manager.h"
 #include "main.h"
 
 /* Simulator settings */

@@ -59,14 +59,15 @@ string(APPEND LVGL_PKG_CONFIG_LIB "-llvgl_linux")
 
 file(GLOB LV_LINUX_LIB_SRC src/lib/*.c)
 file(GLOB LV_LINUX_UI_SRC src/ui/*.c)
+file(GLOB LV_LINUX_DATA_SRC src/data/*.c)
 set(LV_LINUX_INC src/lib)
 
 add_subdirectory(lvgl)
 target_include_directories(lvgl PUBLIC ${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/src/lib ${PKG_CONFIG_INC})
-add_library(lvgl_linux STATIC ${LV_LINUX_LIB_SRC} ${LV_LINUX_UI_SRC} ${LV_LINUX_BACKEND_SRC})
+add_library(lvgl_linux STATIC ${LV_LINUX_LIB_SRC} ${LV_LINUX_UI_SRC} ${LV_LINUX_DATA_SRC} ${LV_LINUX_BACKEND_SRC})
 target_include_directories(lvgl_linux PRIVATE ${LV_LINUX_INC} ${PROJECT_SOURCE_DIR})
 
-add_executable(camper-gui src/main.c ${LV_LINUX_LIB_SRC} ${LV_LINUX_UI_SRC} ${LV_LINUX_BACKEND_SRC})
+add_executable(camper-gui src/main.c ${LV_LINUX_LIB_SRC} ${LV_LINUX_UI_SRC} ${LV_LINUX_DATA_SRC} ${LV_LINUX_BACKEND_SRC})
 target_link_libraries(camper-gui lvgl_linux lvgl lvgl::thorvg m pthread ${PKG_CONFIG_LIB})
 
 # Install the lvgl_linux library and its headers

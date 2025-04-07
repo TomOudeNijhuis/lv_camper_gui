@@ -7,11 +7,12 @@
 #include <curl/curl.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h> 
+#include <stdio.h>
+
 #include "../lib/logger.h"
 #include "../lib/http_client.h"
 #include "lvgl/lvgl.h"
-#include "camper_data.h"
+#include "../data/sensor_types.h"
 #include "../main.h"
 
 static lv_obj_t *ui_household_switch = NULL;

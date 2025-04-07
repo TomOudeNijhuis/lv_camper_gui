@@ -6,13 +6,12 @@
 #include "ui.h"
 #include "status_tab.h"
 #include "logs_tab.h"
-#include "camper_data.h"
 #include "analytics_tab.h"
 #include "../lib/logger.h"
 #include "lvgl/lvgl.h"
 #include "../lib/lv_sdl_disp.h"
 #include "../main.h"
-
+#include "../data/data_manager.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h>
@@ -30,7 +29,6 @@ static lv_timer_t *memory_monitor_timer = NULL;
 
 extern SDL_Window *window;
 extern SDL_Renderer *renderer;
-
 
 // Forward declaration
 static void on_wake_event(lv_event_t *e);

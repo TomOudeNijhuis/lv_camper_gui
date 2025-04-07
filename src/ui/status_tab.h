@@ -7,7 +7,7 @@
 #define STATUS_TAB_H
 
 #include "lvgl/lvgl.h"
-#include "camper_data.h"
+#include "../data/sensor_types.h"
 
 #ifdef __cplusplus
 extern "C" {

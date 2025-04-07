@@ -53,11 +53,11 @@ extern "C" {
 
 /* API endpoints */
 #define API_BASE_URL             "http://camperpi.local:8000"
-#define API_SENSOR_ENDPOINT      API_BASE_URL "/sensors"
-#define API_ACTION_ENDPOINT      API_BASE_URL "/action"
+#define API_SENSOR_ENDPOINT      "http://localhost:8080/api/sensors"
+#define API_ACTION_ENDPOINT      "http://localhost:8080/api/action"
 
 /* Network timeouts */
-#define HTTP_TIMEOUT_SECONDS     5     /* HTTP request timeout in seconds */
+#define HTTP_TIMEOUT_SECONDS     10     /* HTTP request timeout in seconds */
 
 /****************************************************************************
  * Data Update Intervals
@@ -65,15 +65,15 @@ extern "C" {
 
 #define DATA_UPDATE_INTERVAL_MS  10000  /* Data refresh interval in ms */
 #define LOG_REFRESH_INTERVAL_MS  1000   /* Log display refresh interval in ms */
-#define BACKGROUND_FETCH_SLEEP_US 100000  /* Background fetcher sleep time in microseconds */
+#define BACKGROUND_FETCH_SLEEP_US 50000  /* Background fetcher sleep time in microseconds */
 
 /****************************************************************************
  * Other Application Constants
  ****************************************************************************/
 
 /* Maximum lengths */
-#define MAX_URL_LENGTH           128   /* Maximum URL length */
-#define MAX_JSON_PAYLOAD_LENGTH  256   /* Maximum JSON payload length */
+#define MAX_URL_LENGTH           256   /* Maximum URL length */
+#define MAX_JSON_PAYLOAD_LENGTH  128   /* Maximum JSON payload length */
 
 /* Status indicators */
 #define BATTERY_LOW_THRESHOLD    20    /* Battery low warning threshold (%) */
