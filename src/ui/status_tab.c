@@ -13,6 +13,7 @@
 #include "../lib/http_client.h"
 #include "lvgl/lvgl.h"
 #include "../data/sensor_types.h"
+#include "../data/data_manager.h"
 #include "../main.h"
 
 static lv_obj_t *ui_household_switch = NULL;
