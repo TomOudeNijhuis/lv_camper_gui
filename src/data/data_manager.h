@@ -40,16 +40,6 @@ void request_camper_data_fetch(void);
 void request_camper_action(const int entity_id, const char *status);
 
 /**
- * Set camper action (deprecated - use request_camper_action instead)
- */
-int set_camper_action(const int entity_id, const char *status);
-
-/**
- * Fetch system data (deprecated - use request_camper_data_fetch instead)
- */
-int fetch_system_data(void);
-
-/**
  * Get a copy of the current camper data
  */
 camper_sensor_t* get_camper_data(void);

@@ -206,33 +206,25 @@ static lv_obj_t* create_level_bar(lv_obj_t *parent, const char *label_text, int 
     lv_obj_t *label = lv_label_create(container);
     lv_label_set_text(label, label_text);
     
-    // Create styles for the bar
-    static lv_style_t style_bar_bg;
-    static lv_style_t style_bar_indic;
-    static bool styles_initialized = false;
-
-    if (!styles_initialized) {
-
-        lv_style_init(&style_bar_bg);
-        lv_style_set_border_color(&style_bar_bg, color); 
-        lv_style_set_border_width(&style_bar_bg, 2);
-        lv_style_set_pad_all(&style_bar_bg, 6);
-        lv_style_set_radius(&style_bar_bg, 6); 
-
-        lv_style_init(&style_bar_indic);
-        lv_style_set_bg_opa(&style_bar_indic, LV_OPA_COVER); 
-        lv_style_set_bg_color(&style_bar_indic, color); 
-        lv_style_set_radius(&style_bar_indic, 3);
-        styles_initialized = true;
-    }
-
     // Create the bar
     lv_obj_t *bar = lv_bar_create(container);
-    lv_obj_remove_style_all(bar);
-    lv_obj_add_style(bar, &style_bar_bg, 0); 
-    lv_obj_add_style(bar, &style_bar_indic, LV_PART_INDICATOR);
     lv_obj_set_size(bar, lv_pct(100), 30);  
     lv_bar_set_range(bar, 0, 100); 
+    
+    // Set bar styles directly with the provided color
+    lv_obj_set_style_border_color(bar, color, 0);
+    lv_obj_set_style_border_width(bar, 2, 0);
+    lv_obj_set_style_pad_all(bar, 6, 0);
+    lv_obj_set_style_radius(bar, 6, 0);
+
+    lv_obj_set_style_bg_color(bar, lv_color_hex(0xE0E0E0), 0); // Light gray background
+    
+    // Set indicator style with the provided color
+    lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(bar, color, LV_PART_INDICATOR);
+    lv_obj_set_style_radius(bar, 3, LV_PART_INDICATOR);
+    
+    // Set initial value
     lv_bar_set_value(bar, initial_value, LV_ANIM_OFF);
 
     return bar;

@@ -1,5 +1,6 @@
 #include "http_client.h"
 #include "logger.h"
+#include "mem_debug.h"
 #include <curl/curl.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,7 +26,7 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb, void *userdat
             new_capacity = buffer->size + real_size + 1;
         }
         
-        char *new_data = realloc(buffer->data, new_capacity);
+        char *new_data = mem_realloc(buffer->data, new_capacity);
         if (!new_data) {
             log_error("Failed to allocate memory for HTTP response");
             return 0; // Signal error to libcurl
@@ -112,7 +113,7 @@ http_response_t http_get(const char *url, int timeout_seconds) {
     
     // Initialize the response buffer
     http_buffer_t buffer = {0};
-    buffer.data = malloc(4096); // Start with 4KB buffer
+    buffer.data = mem_malloc(4096); // Start with 4KB buffer
     if (!buffer.data) {
         log_error("Failed to allocate memory for HTTP response");
         strcpy(response.error, "Memory allocation failed");
@@ -128,7 +129,7 @@ http_response_t http_get(const char *url, int timeout_seconds) {
     // Set up curl
     CURL *curl = setup_curl_handle(url, &buffer, error_buffer, timeout_seconds);
     if (!curl) {
-        free(buffer.data);
+        mem_free(buffer.data);
         strcpy(response.error, "Failed to initialize curl");
         return response;
     }
@@ -145,7 +146,7 @@ http_response_t http_get(const char *url, int timeout_seconds) {
         } else {
             strcpy(response.error, curl_easy_strerror(res));
         }
-        free(buffer.data);
+        mem_free(buffer.data);
         curl_easy_cleanup(curl);
         return response;
     }
@@ -190,7 +191,7 @@ http_response_t http_post_json(const char *url, const char *json_payload, int ti
     
     // Initialize the response buffer
     http_buffer_t buffer = {0};
-    buffer.data = malloc(4096); // Start with 4KB buffer
+    buffer.data = mem_malloc(4096); // Start with 4KB buffer
     if (!buffer.data) {
         log_error("Failed to allocate memory for HTTP response");
         strcpy(response.error, "Memory allocation failed");
@@ -206,7 +207,7 @@ http_response_t http_post_json(const char *url, const char *json_payload, int ti
     // Set up curl
     CURL *curl = setup_curl_handle(url, &buffer, error_buffer, timeout_seconds);
     if (!curl) {
-        free(buffer.data);
+        mem_free(buffer.data);
         strcpy(response.error, "Failed to initialize curl");
         return response;
     }
@@ -239,7 +240,7 @@ http_response_t http_post_json(const char *url, const char *json_payload, int ti
         } else {
             strcpy(response.error, curl_easy_strerror(res));
         }
-        free(buffer.data);
+        mem_free(buffer.data);
         curl_slist_free_all(headers);
         curl_easy_cleanup(curl);
         return response;
@@ -272,7 +273,7 @@ http_response_t http_post_json(const char *url, const char *json_payload, int ti
 
 void http_response_free(http_response_t *response) {
     if (response) {
-        free(response->body);
+        mem_free(response->body);
         response->body = NULL;
     }
 }

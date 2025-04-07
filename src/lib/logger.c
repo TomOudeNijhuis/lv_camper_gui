@@ -5,8 +5,7 @@
 #include <time.h>
 #include "logger.h"
 #include "lvgl/lvgl.h"
-
-#define MAX_LOG_ENTRIES 100  // Circular buffer size
+#include "../main.h"
 
 // Log level strings - make them accessible
 const char *log_level_names[] = {
@@ -38,7 +37,7 @@ typedef struct {
  */
 void logger_init(void) {
     memset(&logger_state, 0, sizeof(logger_state));
-    logger_state.min_level = LOG_LEVEL_INFO;
+    logger_state.min_level = INITIAL_LOG_LEVEL;
 
     // Initialize colors at runtime with better contrast for light backgrounds
     log_level_colors[0] = lv_color_make(80, 80, 100);    // DEBUG - Blue-gray (darker)

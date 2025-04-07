@@ -58,8 +58,8 @@ make -j
 ```
 
 copy to pi:
-```
-scp build-arm64/bin/camper-gui tom@192.168.128.50:/home/tom
+```bash
+scp build-arm64/bin/camper-gui tom@192.168.68.145:/home/tom
 ```
 
 ### Installing LVGL

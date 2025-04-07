@@ -21,6 +21,7 @@
 #include "lib/logger.h"
 #include "lib/http_client.h"
 #include "data/data_manager.h"
+#include "lib/mem_debug.h"
 #include "main.h"
 
 /* Simulator settings */
@@ -154,6 +155,12 @@ int main(int argc, char **argv)
     /* Parse command line arguments */
     configure(argc, argv);
     
+    #ifdef LV_CAMPER_DEBUG
+
+    // Initialize memory debugging
+    mem_debug_init();
+
+    #endif
     /* Initialize logger */
     logger_init();
     log_info("Application starting v%s", APP_VERSION_STRING);
@@ -183,7 +190,16 @@ int main(int argc, char **argv)
 
     /* Create a Demo */
     create_ui();
-    
+
+    // Print initial memory state
+    ui_print_memory_usage();
+
+    #ifdef LV_CAMPER_DEBUG
+
+    mem_debug_print_stats();
+
+    #endif
+
     /* Main loop */
     while (1) {
         /* Handle SDL events */
@@ -202,6 +218,12 @@ int main(int argc, char **argv)
     
     /* Clean up resources (never reached in normal execution) */
     lv_port_disp_deinit();
+
+    #ifdef LV_CAMPER_DEBUG
     
+    mem_debug_deinit();
+
+    #endif
+
     return 0;
 }

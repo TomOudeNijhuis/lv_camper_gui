@@ -9,10 +9,13 @@
 #include <SDL2/SDL_syswm.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
+#include <drm/drm_mode.h>
+
 #include "lv_sdl_disp.h"
 #include "lvgl/lvgl.h"
 #include "../ui/ui.h" 
 #include "../lib/logger.h"
+#include "../lib/mem_debug.h"
 
 /*********************
  *      DEFINES
@@ -117,9 +120,9 @@ void lv_port_disp_init(int width, int height)
     // Calculate the buffer size in bytes
     size_t buf_size = DISPLAY_WIDTH * DISPLAY_HEIGHT * ((LV_COLOR_DEPTH + 7) / 8);
     
-    // Allocate the frame buffers
-    fb1 = malloc(buf_size);
-    fb2 = malloc(buf_size);
+    // Allocate the frame buffers using memory wrappers
+    fb1 = mem_malloc(buf_size);
+    fb2 = mem_malloc(buf_size);
     
     if (!fb1 || !fb2) {
         fprintf(stderr, "Failed to allocate display buffers\n");
@@ -159,12 +162,12 @@ void lv_port_disp_init(int width, int height)
 void lv_port_disp_deinit(void)
 {
     if (fb1) {
-        free(fb1);
+        mem_free(fb1);
         fb1 = NULL;
     }
     
     if (fb2) {
-        free(fb2);
+        mem_free(fb2);
         fb2 = NULL;
     }
     

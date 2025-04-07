@@ -36,6 +36,10 @@ extern "C" {
 #ifdef LV_CAMPER_DEBUG
     #define MEM_MONITOR_INTERVAL_MS     30000  /* Memory monitoring interval in ms */
     #define MEM_CHANGE_THRESHOLD_BYTES  1024   /* Log if memory changes by this amount */
+    
+    /* Memory debugging options */
+    #define MEM_DEBUG_TRACK_ALLOCATIONS 1      /* Track all memory allocations */
+    #define MEM_DEBUG_LOG_THRESHOLD     10240  /* Log allocations larger than this size */
 #endif
 
 /****************************************************************************
@@ -43,9 +47,7 @@ extern "C" {
  ****************************************************************************/
 
 /* Display power management */
-#define DISPLAY_INACTIVITY_TIMEOUT_MS   30000  /* Time until screen blanks in ms */
-#define DISPLAY_BRIGHTNESS_DEFAULT      100    /* Default display brightness (0-100) */
-#define DISPLAY_BRIGHTNESS_DIMMED       20     /* Dimmed display brightness (0-100) */
+#define DISPLAY_INACTIVITY_TIMEOUT_MS   120000  /* Time until screen blanks in ms */
 
 /****************************************************************************
  * Network Constants
@@ -53,11 +55,9 @@ extern "C" {
 
 /* API endpoints */
 #define API_BASE_URL             "http://camperpi.local:8000"
-#define API_SENSOR_ENDPOINT      "http://localhost:8080/api/sensors"
-#define API_ACTION_ENDPOINT      "http://localhost:8080/api/action"
 
 /* Network timeouts */
-#define HTTP_TIMEOUT_SECONDS     10     /* HTTP request timeout in seconds */
+#define HTTP_TIMEOUT_SECONDS     5      /* HTTP request timeout in seconds */
 
 /****************************************************************************
  * Data Update Intervals
@@ -67,16 +67,18 @@ extern "C" {
 #define LOG_REFRESH_INTERVAL_MS  1000   /* Log display refresh interval in ms */
 #define BACKGROUND_FETCH_SLEEP_US 50000  /* Background fetcher sleep time in microseconds */
 
+#define MAX_LOG_ENTRIES     100  /* Maximum number of log entries to keep */
+#define INITIAL_LOG_LEVEL   LOG_LEVEL_INFO /* Initial log level for displaying logs */
+
 /****************************************************************************
  * Other Application Constants
  ****************************************************************************/
 
 /* Maximum lengths */
 #define MAX_URL_LENGTH           256   /* Maximum URL length */
-#define MAX_JSON_PAYLOAD_LENGTH  128   /* Maximum JSON payload length */
+#define MAX_JSON_ACTION_PAYLOAD_LENGTH  128   /* Maximum JSON payload length */
 
 /* Status indicators */
-#define BATTERY_LOW_THRESHOLD    20    /* Battery low warning threshold (%) */
 #define WATER_LOW_THRESHOLD      20    /* Water low warning threshold (%) */
 #define WASTE_HIGH_THRESHOLD     80    /* Waste high warning threshold (%) */
 

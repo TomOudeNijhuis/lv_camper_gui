@@ -13,6 +13,7 @@
 #include "data_actions.h"
 #include "../lib/http_client.h"
 #include "../lib/logger.h"
+#include "../lib/mem_debug.h"
 #include "../main.h"
 
 // Global variables to hold the current sensor data
@@ -221,7 +222,7 @@ static void* background_worker_thread(void* arg) {
  */
 static int fetch_camper_data_internal(void) {
     char api_url[MAX_URL_LENGTH];
-    snprintf(api_url, sizeof(api_url), "%s/5/states/", API_SENSOR_ENDPOINT);
+    snprintf(api_url, sizeof(api_url), "%s/sensors/5/states/", API_BASE_URL);
     
     http_response_t response = http_get(api_url, HTTP_TIMEOUT_SECONDS);
     
@@ -260,7 +261,10 @@ static int fetch_camper_data_internal(void) {
  * Fetch system data from the server
  */
 static int fetch_system_data_internal(void) {
-    http_response_t response = http_get(API_SENSOR_ENDPOINT, HTTP_TIMEOUT_SECONDS);
+    char api_url[MAX_URL_LENGTH];
+    snprintf(api_url, sizeof(api_url), "%s/sensors/5/states/", API_BASE_URL);
+
+    http_response_t response = http_get(api_url, HTTP_TIMEOUT_SECONDS);
     
     if (!response.success) {
         log_error("Failed to fetch sensor data: %s", response.error);
@@ -330,20 +334,6 @@ static int fetch_system_data_internal(void) {
     json_object_put(parsed_json);
     http_response_free(&response);
     return 0;
-}
-
-/**
- * Public API to fetch system data (deprecated)
- */
-int fetch_system_data(void) {
-    return fetch_system_data_internal();
-}
-
-/**
- * Public API to set camper action (deprecated)
- */
-int set_camper_action(const int entity_id, const char *status) {
-    return set_camper_action_internal(entity_id, status);
 }
 
 // Thread-safe getter functions to access the sensor data

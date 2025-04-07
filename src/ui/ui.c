@@ -3,6 +3,12 @@
  * ui.c - User interface implementation for the Camper GUI
  *
  ******************************************************************/
+#include <stdlib.h>
+#include <stdbool.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <SDL2/SDL.h>
+
 #include "ui.h"
 #include "status_tab.h"
 #include "logs_tab.h"
@@ -12,11 +18,8 @@
 #include "../lib/lv_sdl_disp.h"
 #include "../main.h"
 #include "../data/data_manager.h"
-#include <stdlib.h>
-#include <stdbool.h>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <SDL2/SDL.h>
+#include "../lib/mem_debug.h"
+
 
 // Add at the top with other static variables
 static bool is_sleeping = false;
@@ -34,6 +37,60 @@ extern SDL_Renderer *renderer;
 static void on_wake_event(lv_event_t *e);
 static void inactivity_timer_cb(lv_timer_t *timer);
 static void data_update_timer_cb(lv_timer_t *timer);
+
+#ifdef LV_CAMPER_DEBUG
+/**
+ * Callback for memory leak checking
+ */
+static void memory_leak_check_cb(lv_timer_t *timer) {
+    // Print current memory usage statistics
+    ui_print_memory_usage();
+    mem_debug_print_stats();
+    
+    // Check for potential memory leaks
+    int leaks = mem_debug_check_leaks();
+    if (leaks > 0) {
+        log_warning("Potential memory leaks detected: %d blocks not properly freed", leaks);
+    }
+}
+
+/**
+ * Timer callback to periodically monitor memory usage
+ */
+static void memory_monitor_timer_cb(lv_timer_t *timer) {
+    static size_t last_used = 0;
+    
+    lv_mem_monitor_t mon;
+    lv_mem_monitor(&mon);
+    
+    size_t current_used = mon.total_size - mon.free_size;
+    
+    // Log if memory usage changed significantly
+    if (labs((long)(current_used - last_used)) > MEM_CHANGE_THRESHOLD_BYTES) {
+        log_debug("LVGL memory usage changed: %+ld bytes (%u bytes total used, %u%% fragmentation)",
+                 (long)(current_used - last_used),
+                 current_used, 
+                 mon.frag_pct);
+        last_used = current_used;
+    }
+}
+
+#endif
+
+/**
+ * Print memory usage statistics for debugging
+ */
+void ui_print_memory_usage(void) {
+    lv_mem_monitor_t mon;
+    lv_mem_monitor(&mon);
+    
+    log_info("LVGL memory usage statistics:");
+    log_info("  Total size: %u bytes", mon.total_size);
+    log_info("  Free memory: %u bytes (%u%%)", mon.free_size, 100 - mon.used_pct);
+    log_info("  Used memory: %u bytes (%u%%)", mon.total_size - mon.free_size, mon.used_pct);
+    log_info("  Largest free block: %u bytes", mon.free_biggest_size);
+    log_info("  Fragmentation: %u%%", mon.frag_pct);
+}
 
 /**
  * Turn display off using
@@ -178,44 +235,6 @@ static void data_update_timer_cb(lv_timer_t *timer) {
     }
 }
 
-#ifdef LV_CAMPER_DEBUG
-/**
- * Timer callback to periodically monitor memory usage
- */
-static void memory_monitor_timer_cb(lv_timer_t *timer) {
-    static size_t last_used = 0;
-    
-    lv_mem_monitor_t mon;
-    lv_mem_monitor(&mon);
-    
-    size_t current_used = mon.total_size - mon.free_size;
-    
-    // Log if memory usage changed significantly
-    if (abs((int)(current_used - last_used)) > MEM_CHANGE_THRESHOLD_BYTES) {
-        log_debug("Memory usage changed: %+d bytes (%u bytes total used, %u%% fragmentation)",
-                 (int)(current_used - last_used),
-                 current_used, 
-                 mon.frag_pct);
-        last_used = current_used;
-    }
-}
-#endif
-
-/**
- * Print memory usage statistics for debugging
- */
-void ui_print_memory_usage(void) {
-    lv_mem_monitor_t mon;
-    lv_mem_monitor(&mon);
-    
-    log_info("Memory usage statistics:");
-    log_info("  Total size: %u bytes", mon.total_size);
-    log_info("  Free memory: %u bytes (%u%%)", mon.free_size, 100 - mon.used_pct);
-    log_info("  Used memory: %u bytes (%u%%)", mon.total_size - mon.free_size, mon.used_pct);
-    log_info("  Largest free block: %u bytes", mon.free_biggest_size);
-    log_info("  Fragmentation: %u%%", mon.frag_pct);
-}
-
 /**
  * Cleanup UI resources - should be called before exiting the application
  */
@@ -236,21 +255,27 @@ void ui_cleanup(void) {
         update_timer = NULL;
     }
     
-#ifdef LV_CAMPER_DEBUG
-    if (memory_monitor_timer != NULL) {
-        lv_timer_del(memory_monitor_timer);
-        memory_monitor_timer = NULL;
-    }
-    
-    // Print final memory state for comparison
-    ui_print_memory_usage();
-#endif
-    
     // Delete sleep overlay if it exists
     if (sleep_overlay != NULL) {
         lv_obj_del(sleep_overlay);
         sleep_overlay = NULL;
     }
+
+    #ifdef LV_CAMPER_DEBUG
+    // Delete memory monitoring timer if it exists
+    if (memory_monitor_timer != NULL) {
+        lv_timer_del(memory_monitor_timer);
+        memory_monitor_timer = NULL;
+    }
+
+    // Check for memory leaks
+    mem_debug_check_leaks();
+    
+    // Print final memory state for comparison
+    ui_print_memory_usage();
+    mem_debug_print_stats();
+
+    #endif
 }
 
 // Update your sleep button handler
@@ -278,33 +303,38 @@ static void exit_button_event_handler(lv_event_t *e) {
  */
 void create_ui(void)
 {
+#ifdef LV_CAMPER_DEBUG
+    // Initialize memory debugging
+    mem_debug_init();
+#endif
+
     // Create a tabview object
     lv_obj_t *tabview = lv_tabview_create(lv_screen_active());
     lv_obj_set_size(tabview, lv_pct(100), lv_pct(100));
-    
+
     // Remove padding and gap between tabs and content
     lv_obj_set_style_pad_all(tabview, 0, 0);
     
     // Create tabs
-    lv_obj_t *tab_status = lv_tabview_add_tab(tabview, "Status");
+    lv_obj_t *tab_status = lv_tabview_add_tab(tabview, "Status"); 
     lv_obj_t *tab_analytics = lv_tabview_add_tab(tabview, "Analytics");
     lv_obj_t *tab_logs = lv_tabview_add_tab(tabview, "Logs");
-    
+
     // Get the tab bar (btns container)
     lv_obj_t *tab_btns = lv_tabview_get_tab_btns(tabview);
     
-    // Create a sleep button
+    // Create a sleep button 
     lv_obj_t *sleep_btn = lv_btn_create(tab_btns);
     lv_obj_set_width(sleep_btn, 50);
     lv_obj_set_height(sleep_btn, LV_PCT(100));
-    lv_obj_align(sleep_btn, LV_ALIGN_RIGHT_MID, -60, 0); 
+    lv_obj_align(sleep_btn, LV_ALIGN_RIGHT_MID, -60, 0);
     lv_obj_set_style_radius(sleep_btn, 0, 0);
     lv_obj_set_style_bg_color(sleep_btn, lv_color_hex(0x3366CC), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(sleep_btn, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(sleep_btn, lv_color_hex(0x1A478F), LV_PART_MAIN | LV_STATE_PRESSED);
 
     lv_obj_t *sleep_label = lv_label_create(sleep_btn);
-    lv_label_set_text(sleep_label, LV_SYMBOL_POWER); 
+    lv_label_set_text(sleep_label, LV_SYMBOL_POWER);
     lv_obj_center(sleep_label);
 
     // Add event handler for sleep button
@@ -313,7 +343,7 @@ void create_ui(void)
     // Create an exit button
     lv_obj_t *exit_btn = lv_btn_create(tab_btns);
     lv_obj_set_width(exit_btn, 50);
-    lv_obj_set_height(exit_btn, LV_PCT(100));
+    lv_obj_set_height(exit_btn, LV_PCT(100));    
     lv_obj_align(exit_btn, LV_ALIGN_RIGHT_MID, -5, 0);
     lv_obj_set_style_radius(exit_btn, 0, 0);
     lv_obj_set_style_bg_color(exit_btn, lv_color_hex(0xFF0000), LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -366,9 +396,9 @@ void create_ui(void)
     lv_label_set_text(placeholder, "Future Content Area");
     lv_obj_set_style_text_color(placeholder, lv_color_hex(0x888888), 0); // Light gray text
     lv_obj_align(placeholder, LV_ALIGN_CENTER, 0, 0);
-
+ 
     // Create content for each tab
-    create_status_tab(left_column);
+    create_status_tab(left_column);    
     create_analytics_tab(tab_analytics);
     create_logs_tab(tab_logs);
 
@@ -380,7 +410,7 @@ void create_ui(void)
     // Create memory monitoring timer
     memory_monitor_timer = lv_timer_create(memory_monitor_timer_cb, MEM_MONITOR_INTERVAL_MS, NULL);
     
-    // Print initial memory state
-    ui_print_memory_usage();
+    // Create memory leak check timer (runs less frequently to minimize overhead)
+    lv_timer_t *leak_check_timer = lv_timer_create(memory_leak_check_cb, MEM_MONITOR_INTERVAL_MS * 5, NULL);
 #endif
 }
