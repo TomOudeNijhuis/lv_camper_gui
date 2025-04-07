@@ -464,16 +464,16 @@ void lv_sdl_handle_events(void)
                 event.type == SDL_FINGERDOWN) {
                 ui_exit_sleep_mode();
                 continue;
-            } else {
-                // Reset inactivity timer on any user interaction when not sleeping
-                if (event.type == SDL_KEYDOWN || 
-                    event.type == SDL_MOUSEWHEEL ||
-                    event.type == SDL_MOUSEMOTION ||
-                    event.type == SDL_MOUSEBUTTONDOWN ||
-                    event.type == SDL_FINGERDOWN ||
-                    event.type == SDL_FINGERMOTION) {
-                    ui_reset_inactivity_timer();
-                }
+            }
+        } else {
+            // Reset inactivity timer on any user interaction when not sleeping
+            if (event.type == SDL_KEYDOWN || 
+                event.type == SDL_MOUSEWHEEL ||
+                event.type == SDL_MOUSEMOTION ||
+                event.type == SDL_MOUSEBUTTONDOWN ||
+                event.type == SDL_FINGERDOWN ||
+                event.type == SDL_FINGERMOTION) {
+                ui_reset_inactivity_timer();
             }
         }
     }

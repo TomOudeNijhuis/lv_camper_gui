@@ -20,6 +20,8 @@
 #include "ui/ui.h" 
 #include "lib/logger.h"
 #include "lib/http_client.h"
+#include "ui/camper_data.h"
+#include "main.h"
 
 /* Simulator settings */
 typedef struct {
@@ -154,9 +156,13 @@ int main(int argc, char **argv)
     
     /* Initialize logger */
     logger_init();
-    log_info("Application starting");
+    log_info("Application starting v%s", APP_VERSION_STRING);
 
     http_client_init();
+
+    if (init_background_fetcher() != 0) {
+        log_error("Failed to initialize background data fetcher");
+    }
 
     /* Initialize LVGL first */
     lvgl_init();

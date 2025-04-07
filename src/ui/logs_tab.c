@@ -1,6 +1,7 @@
 #include "logs_tab.h"
 #include "../lib/logger.h"
 #include "lvgl/lvgl.h"
+#include "../main.h"
 
 static lv_obj_t *logs_container;
 static lv_timer_t *refresh_timer;
@@ -98,7 +99,7 @@ void create_logs_tab(lv_obj_t *parent) {
     lv_obj_add_event_cb(clear_btn, clear_button_event_cb, LV_EVENT_CLICKED, NULL);
     
     // Create a timer to refresh the logs
-    refresh_timer = lv_timer_create(refresh_logs_cb, 1000, NULL);
+    refresh_timer = lv_timer_create(refresh_logs_cb, LOG_REFRESH_INTERVAL_MS, NULL);
     
     // Set initial state - INFO is default in logger.c
     update_button_states(LOG_LEVEL_INFO);

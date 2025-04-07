@@ -12,6 +12,7 @@
 #include "../lib/http_client.h"
 #include "lvgl/lvgl.h"
 #include "camper_data.h"
+#include "../main.h"
 
 static lv_obj_t *ui_household_switch = NULL;
 static lv_obj_t *ui_pump_switch = NULL;
@@ -31,10 +32,8 @@ static void household_event_handler(lv_event_t *e)
     const char *status = checked ? "ON" : "OFF";
     log_info("Household switch changed to: %s", status);
     
-    // Send the API request
-    if (set_camper_action(20, status) != 0) {
-        log_error("Failed to update household switch via API");
-    }
+    // Request background action instead of blocking UI
+    request_camper_action(20, status);
 }
 
 static void pump_event_handler(lv_event_t *e)
@@ -43,12 +42,10 @@ static void pump_event_handler(lv_event_t *e)
     bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
 
     const char *status = checked ? "ON" : "OFF";
-    log_info("Pump switch changed to: %s", checked ? "ON" : "OFF");
+    log_info("Pump switch changed to: %s", status);
     
-    // Send the API request
-    if (set_camper_action(23, status) != 0) {
-        log_error("Failed to update pump switch via API");
-    }
+    // Request background action instead of blocking UI
+    request_camper_action(23, status);
 }
 
 static void update_battery_gauge(lv_obj_t *scale_line, lv_obj_t *needle_line, float voltage) {
@@ -208,25 +205,30 @@ static lv_obj_t* create_level_bar(lv_obj_t *parent, const char *label_text, int 
     lv_label_set_text(label, label_text);
     
     // Create styles for the bar
-    lv_style_t *style_bar_bg = malloc(sizeof(lv_style_t));
-    lv_style_t *style_bar_indic = malloc(sizeof(lv_style_t));
+    static lv_style_t style_bar_bg;
+    static lv_style_t style_bar_indic;
+    static bool styles_initialized = false;
 
-    lv_style_init(style_bar_bg);
-    lv_style_set_border_color(style_bar_bg, color); 
-    lv_style_set_border_width(style_bar_bg, 2);
-    lv_style_set_pad_all(style_bar_bg, 6);
-    lv_style_set_radius(style_bar_bg, 6); 
+    if (!styles_initialized) {
 
-    lv_style_init(style_bar_indic);
-    lv_style_set_bg_opa(style_bar_indic, LV_OPA_COVER); 
-    lv_style_set_bg_color(style_bar_indic, color); 
-    lv_style_set_radius(style_bar_indic, 3);
+        lv_style_init(&style_bar_bg);
+        lv_style_set_border_color(&style_bar_bg, color); 
+        lv_style_set_border_width(&style_bar_bg, 2);
+        lv_style_set_pad_all(&style_bar_bg, 6);
+        lv_style_set_radius(&style_bar_bg, 6); 
+
+        lv_style_init(&style_bar_indic);
+        lv_style_set_bg_opa(&style_bar_indic, LV_OPA_COVER); 
+        lv_style_set_bg_color(&style_bar_indic, color); 
+        lv_style_set_radius(&style_bar_indic, 3);
+        styles_initialized = true;
+    }
 
     // Create the bar
     lv_obj_t *bar = lv_bar_create(container);
     lv_obj_remove_style_all(bar);
-    lv_obj_add_style(bar, style_bar_bg, 0); 
-    lv_obj_add_style(bar, style_bar_indic, LV_PART_INDICATOR);
+    lv_obj_add_style(bar, &style_bar_bg, 0); 
+    lv_obj_add_style(bar, &style_bar_indic, LV_PART_INDICATOR);
     lv_obj_set_size(bar, lv_pct(100), 30);  
     lv_bar_set_range(bar, 0, 100); 
     lv_bar_set_value(bar, initial_value, LV_ANIM_OFF);
@@ -364,16 +366,28 @@ void update_status_ui(camper_sensor_t *camper_data)
         }
     }
 
-    // Update water level bar (placeholder values - replace with actual sensing values)
+    // Update water level bar
     if (ui_water_bar) {
-        // Assuming water_state in the range 0-100 indicates fill level percentage
-        lv_bar_set_value(ui_water_bar, camper_data->water_state ? 100 : 0, LV_ANIM_ON);
+        lv_bar_set_value(ui_water_bar, camper_data->water_state, LV_ANIM_ON);
+        
+        // Add warning indicator if water level is low
+        if (camper_data->water_state < WATER_LOW_THRESHOLD) {
+            lv_obj_set_style_bg_color(ui_water_bar, lv_color_hex(0xFF8000), LV_PART_INDICATOR);
+        } else {
+            lv_obj_set_style_bg_color(ui_water_bar, lv_palette_main(LV_PALETTE_BLUE), LV_PART_INDICATOR);
+        }
     }
 
-    // Update waste level bar (placeholder values - replace with actual sensing values)
+    // Update waste level bar
     if (ui_waste_bar) {
-        // Assuming waste_state in the range 0-100 indicates fill level percentage
-        lv_bar_set_value(ui_waste_bar, camper_data->waste_state ? 100 : 0, LV_ANIM_ON);
+        lv_bar_set_value(ui_waste_bar, camper_data->waste_state, LV_ANIM_ON);
+        
+        // Add warning indicator if waste level is high
+        if (camper_data->waste_state > WASTE_HIGH_THRESHOLD) {
+            lv_obj_set_style_bg_color(ui_waste_bar, lv_color_hex(0xFF0000), LV_PART_INDICATOR);
+        } else {
+            lv_obj_set_style_bg_color(ui_waste_bar, lv_palette_main(LV_PALETTE_ORANGE), LV_PART_INDICATOR);
+        }
     }
 
     // Update battery gauges

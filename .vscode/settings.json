@@ -12,6 +12,7 @@
         "array": "c",
         "string": "c",
         "string_view": "c",
-        "http_client.h": "c"
+        "http_client.h": "c",
+        "cstdlib": "c"
     }
 }

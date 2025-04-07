@@ -11,6 +11,7 @@
 #include "../lib/logger.h"
 #include "lvgl/lvgl.h"
 #include "../lib/lv_sdl_disp.h"
+#include "../main.h"
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -23,9 +24,10 @@ static bool is_sleeping = false;
 static lv_obj_t *sleep_overlay = NULL;
 static lv_timer_t *inactivity_timer = NULL;
 static lv_timer_t *update_timer = NULL;
+#ifdef LV_CAMPER_DEBUG
+static lv_timer_t *memory_monitor_timer = NULL;
+#endif
 
-#define INACTIVITY_TIMEOUT_MS 30000
-#define DATA_UPDATE_INTERVAL_MS 10000
 extern SDL_Window *window;
 extern SDL_Renderer *renderer;
 
@@ -76,6 +78,12 @@ void ui_enter_sleep_mode(void) {
     
     log_info("Entering sleep mode");
     is_sleeping = true;
+    
+    // Delete previous overlay if it exists (prevents memory leaks)
+    if (sleep_overlay != NULL) {
+        lv_obj_del(sleep_overlay);
+        sleep_overlay = NULL;
+    }
     
     // Create a black overlay with "touch to wake" text
     sleep_overlay = lv_obj_create(lv_screen_active());
@@ -163,15 +171,87 @@ void ui_reset_inactivity_timer(void) {
  * Timer callback for data updates
  */
 static void data_update_timer_cb(lv_timer_t *timer) {
-    camper_sensor_t *camper_data;
+    if (!ui_is_sleeping() && !is_background_busy()) {
+        // Request a background fetch instead of blocking
+        request_camper_data_fetch();
+        
+        // Update UI with latest data regardless of whether new data is being fetched
+        update_status_ui(get_camper_data());
+    }
+}
 
-    if(!ui_is_sleeping()) {
-        if(fetch_camper_data() == 0) {
-            camper_data = get_camper_data();
-            update_status_ui(camper_data);
-        } else {
-            log_error("Failed to fetch camper data");
-        }
+#ifdef LV_CAMPER_DEBUG
+/**
+ * Timer callback to periodically monitor memory usage
+ */
+static void memory_monitor_timer_cb(lv_timer_t *timer) {
+    static size_t last_used = 0;
+    
+    lv_mem_monitor_t mon;
+    lv_mem_monitor(&mon);
+    
+    size_t current_used = mon.total_size - mon.free_size;
+    
+    // Log if memory usage changed significantly
+    if (abs((int)(current_used - last_used)) > MEM_CHANGE_THRESHOLD_BYTES) {
+        log_debug("Memory usage changed: %+d bytes (%u bytes total used, %u%% fragmentation)",
+                 (int)(current_used - last_used),
+                 current_used, 
+                 mon.frag_pct);
+        last_used = current_used;
+    }
+}
+#endif
+
+/**
+ * Print memory usage statistics for debugging
+ */
+void ui_print_memory_usage(void) {
+    lv_mem_monitor_t mon;
+    lv_mem_monitor(&mon);
+    
+    log_info("Memory usage statistics:");
+    log_info("  Total size: %u bytes", mon.total_size);
+    log_info("  Free memory: %u bytes (%u%%)", mon.free_size, 100 - mon.used_pct);
+    log_info("  Used memory: %u bytes (%u%%)", mon.total_size - mon.free_size, mon.used_pct);
+    log_info("  Largest free block: %u bytes", mon.free_biggest_size);
+    log_info("  Fragmentation: %u%%", mon.frag_pct);
+}
+
+/**
+ * Cleanup UI resources - should be called before exiting the application
+ */
+void ui_cleanup(void) {
+    log_debug("Cleaning up UI resources");
+    
+    // Shutdown the background fetcher
+    shutdown_background_fetcher();
+    
+    // Delete timers
+    if (inactivity_timer != NULL) {
+        lv_timer_del(inactivity_timer);
+        inactivity_timer = NULL;
+    }
+    
+    if (update_timer != NULL) {
+        lv_timer_del(update_timer);
+        update_timer = NULL;
+    }
+    
+#ifdef LV_CAMPER_DEBUG
+    if (memory_monitor_timer != NULL) {
+        lv_timer_del(memory_monitor_timer);
+        memory_monitor_timer = NULL;
+    }
+    
+    // Print final memory state for comparison
+    ui_print_memory_usage();
+#endif
+    
+    // Delete sleep overlay if it exists
+    if (sleep_overlay != NULL) {
+        lv_obj_del(sleep_overlay);
+        sleep_overlay = NULL;
     }
 }
 
@@ -186,6 +266,10 @@ static void sleep_button_event_handler(lv_event_t *e) {
 
 static void exit_button_event_handler(lv_event_t *e) {
     log_info("Exit button pressed, shutting down application");
+    
+    // Clean up UI resources
+    ui_cleanup();
+    
     // Exit the application
     exit(0);
 }
@@ -291,6 +375,14 @@ void create_ui(void)
     create_logs_tab(tab_logs);
 
     // Create inactivity timer to automatically enter sleep mode
-    inactivity_timer = lv_timer_create(inactivity_timer_cb, INACTIVITY_TIMEOUT_MS, NULL);
+    inactivity_timer = lv_timer_create(inactivity_timer_cb, DISPLAY_INACTIVITY_TIMEOUT_MS, NULL);
     update_timer = lv_timer_create(data_update_timer_cb, DATA_UPDATE_INTERVAL_MS, NULL);
+    
+#ifdef LV_CAMPER_DEBUG
+    // Create memory monitoring timer
+    memory_monitor_timer = lv_timer_create(memory_monitor_timer_cb, MEM_MONITOR_INTERVAL_MS, NULL);
+    
+    // Print initial memory state
+    ui_print_memory_usage();
+#endif
 }

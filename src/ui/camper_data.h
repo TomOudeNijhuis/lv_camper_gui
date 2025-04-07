@@ -45,12 +45,22 @@ typedef struct {
     bool pump_state;
 } camper_sensor_t;
 
-// Fetch data from the server
-int fetch_camper_data(void);
-camper_sensor_t* get_camper_data(void);
-int set_camper_action(const int entity_id, const char *status);
+// Initialize the background fetch system
+int init_background_fetcher(void);
 
-// Getter functions to access the data
+// Shutdown the background fetcher
+void shutdown_background_fetcher(void);
+
+// Request a fetch operation (non-blocking)
+void request_camper_data_fetch(void);
+
+// Request a camper action in the background
+void request_camper_action(const int entity_id, const char *status);
+
+// Check if any background operation is in progress
+bool is_background_busy(void);
+
+// Getter functions to access the data (thread-safe)
 smart_solar_t* get_smart_solar_data(void);
 smart_shunt_t* get_smart_shunt_data(void);
 climate_sensor_t* get_inside_climate_data(void);
