@@ -161,55 +161,34 @@ void logger_clear(void) {
     logger_state.count = 0;
 }
 
-// Timer callback to restore scroll position
-static void restore_scroll_cb(lv_timer_t *timer) {
-    // Use proper LVGL API to get user data instead of direct struct access
-    scroll_restore_data_t *data = (scroll_restore_data_t *)lv_timer_get_user_data(timer);
-    
-    // Restore the scroll position
-    lv_obj_scroll_to_y(data->container, data->scroll_y, LV_ANIM_OFF);
-    
-    // Free the data structure and delete the timer
-    free(data);
-    lv_timer_del(timer);
-}
-
 /**
  * Update the logs display in the UI
  */
 void logger_update_ui(lv_obj_t *log_container) {
-    // Store current scroll position
-    lv_coord_t scroll_y = lv_obj_get_scroll_y(log_container);
+    static uint32_t last_count = 0;
+    uint32_t current_count;
+    const log_entry_t *logs = logger_get_logs(&current_count);
     
-    // Temporarily hide the container during updates to prevent flicker
-    lv_obj_add_flag(log_container, LV_OBJ_FLAG_HIDDEN);
-    
-    // Clear current content
-    lv_obj_clean(log_container);
-    
-    // Get logs
-    uint32_t count;
-    const log_entry_t *logs = logger_get_logs(&count);
-    
-    // Calculate starting index to display logs in chronological order
-    uint32_t start_idx = 0;
-    if (count == MAX_LOG_ENTRIES) {
-        start_idx = logger_state.current_index;
+    // Nothing new to update
+    if (current_count == last_count) {
+        return;
     }
     
-    // Add log entries to the container
-    for (uint32_t i = 0; i < count; i++) {
-        uint32_t idx = (start_idx + i) % MAX_LOG_ENTRIES;
+    // Store scroll position
+    lv_coord_t scroll_y = lv_obj_get_scroll_y(log_container);
+    
+    // Only add new entries
+    for (uint32_t i = last_count; i < current_count; i++) {
+        uint32_t idx = (logger_state.current_index - (current_count - i)) % MAX_LOG_ENTRIES;
         const log_entry_t *entry = &logs[idx];
         
         if (entry->level < logger_state.min_level) {
             continue;
         }
         
-        // Create the log entry label
+        // Create just the new log entry
         lv_obj_t *log_label = lv_label_create(log_container);
         
-        // Format: [TIME] LEVEL: Message
         char buffer[512];
         snprintf(buffer, sizeof(buffer), "[%s] %s: %s", 
                  entry->timestamp, 
@@ -220,9 +199,12 @@ void logger_update_ui(lv_obj_t *log_container) {
         lv_obj_set_style_text_color(log_label, log_level_colors[entry->level], 0);
     }
     
-    // Restore scroll position immediately - no need for timer
-    lv_obj_scroll_to_y(log_container, scroll_y, LV_ANIM_OFF);
+    // Update our counter
+    last_count = current_count;
     
-    // Make container visible again after update is complete
-    lv_obj_clear_flag(log_container, LV_OBJ_FLAG_HIDDEN);
+    // Restore scroll position if at bottom (auto-follow)
+    lv_coord_t max_scroll = lv_obj_get_scroll_bottom(log_container);
+    if (scroll_y >= max_scroll - 10) {
+        lv_obj_scroll_to_y(log_container, LV_COORD_MAX, LV_ANIM_OFF);
+    }
 }

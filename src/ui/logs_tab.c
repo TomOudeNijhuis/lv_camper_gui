@@ -2,13 +2,17 @@
 #include "../lib/logger.h"
 #include "lvgl/lvgl.h"
 #include "../main.h"
+#include "ui.h"
 
 static lv_obj_t *logs_container;
 static lv_timer_t *refresh_timer;
 static lv_obj_t *level_buttons[5]; // Store button references to update their appearance
 
 static void refresh_logs_cb(lv_timer_t *timer) {
-    logger_update_ui(logs_container);
+    if (!ui_is_sleeping()) 
+    {
+        logger_update_ui(logs_container);
+    }
 }
 
 static void update_button_states(log_level_t active_level) {
