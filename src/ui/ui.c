@@ -28,6 +28,7 @@ static lv_timer_t *inactivity_timer = NULL;
 static lv_timer_t *update_timer = NULL;
 #ifdef LV_CAMPER_DEBUG
 static lv_timer_t *memory_monitor_timer = NULL;
+static lv_timer_t *leak_check_timer = NULL;
 #endif
 
 extern SDL_Window *window;
@@ -42,7 +43,7 @@ static void data_update_timer_cb(lv_timer_t *timer);
 /**
  * Callback for memory leak checking
  */
-static void memory_leak_check_cb(lv_timer_t *timer) {
+static void leak_check_timer_cb(lv_timer_t *timer) {
     // Print current memory usage statistics
     ui_print_memory_usage();
     mem_debug_print_stats();
@@ -268,6 +269,11 @@ void ui_cleanup(void) {
         memory_monitor_timer = NULL;
     }
 
+    if (leak_check_timer != NULL) {
+        lv_timer_del(leak_check_timer);
+        leak_check_timer = NULL;
+    }
+    
     // Check for memory leaks
     mem_debug_check_leaks();
     
@@ -411,6 +417,6 @@ void create_ui(void)
     memory_monitor_timer = lv_timer_create(memory_monitor_timer_cb, MEM_MONITOR_INTERVAL_MS, NULL);
     
     // Create memory leak check timer (runs less frequently to minimize overhead)
-    lv_timer_t *leak_check_timer = lv_timer_create(memory_leak_check_cb, MEM_MONITOR_INTERVAL_MS * 5, NULL);
+    leak_check_timer = lv_timer_create(leak_check_timer_cb, MEM_MONITOR_INTERVAL_MS * 5, NULL);
 #endif
 }

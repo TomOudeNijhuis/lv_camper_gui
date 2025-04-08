@@ -83,7 +83,7 @@ static void add_log_entry(log_level_t level, const char *fmt, va_list args) {
     fprintf(level >= LOG_LEVEL_WARNING ? stderr : stdout, 
         "[%s] %s: %s\n", 
         entry->timestamp, 
-        log_level_names[level],  // Changed from level_strings
+        log_level_names[level],
         entry->message);
     
     // Update indices

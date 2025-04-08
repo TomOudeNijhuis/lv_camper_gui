@@ -32,6 +32,7 @@ extern "C" {
  * Memory Management Constants
  ****************************************************************************/
 
+ 
 /* Memory monitoring */
 #ifdef LV_CAMPER_DEBUG
     #define MEM_MONITOR_INTERVAL_MS     30000  /* Memory monitoring interval in ms */
@@ -65,7 +66,7 @@ extern "C" {
 
 #define DATA_UPDATE_INTERVAL_MS  10000  /* Data refresh interval in ms */
 #define LOG_REFRESH_INTERVAL_MS  1000   /* Log display refresh interval in ms */
-#define BACKGROUND_FETCH_SLEEP_US 50000  /* Background fetcher sleep time in microseconds */
+#define BACKGROUND_FETCH_SLEEP_US 200000  /* Background fetcher sleep time in microseconds */
 
 #define MAX_LOG_ENTRIES     100  /* Maximum number of log entries to keep */
 #define INITIAL_LOG_LEVEL   LOG_LEVEL_INFO /* Initial log level for displaying logs */
