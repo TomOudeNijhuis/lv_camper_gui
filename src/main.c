@@ -152,10 +152,6 @@ static void lvgl_init(void)
 
 int main(int argc, char **argv)
 {
-    static uint32_t frame_count = 0;
-    static uint32_t refresh_count = 0;
-    static uint32_t last_time = 0;
-
     /* Parse command line arguments */
     configure(argc, argv);
     
@@ -163,6 +159,10 @@ int main(int argc, char **argv)
 
     // Initialize memory debugging
     mem_debug_init();
+    
+    static uint32_t frame_count = 0;
+    static uint32_t refresh_count = 0;
+    static uint32_t last_time = 0;
 
     #endif
     /* Initialize logger */
@@ -211,10 +211,13 @@ int main(int argc, char **argv)
         
         /* Let LVGL do its work */
         lv_task_handler();
-        
-        frame_count++;
+
+        #ifdef LV_CAMPER_DEBUG
+
         refresh_count++;
+        frame_count++;
         uint32_t current_time = SDL_GetTicks();
+        
 
         if (refresh_count % 1000 == 0) {
             log_debug("Running LVGL garbage collection");
@@ -225,17 +228,14 @@ int main(int argc, char **argv)
             }
         }
 
-        if (refresh_count % 10000 == 0) {
-            //log_info("Performing full UI refresh");
-            //refresh_ui_elements();  // Implement this function as discussed earlier
-        }
-
         if (current_time - last_time > 5000) {
             float fps = frame_count / ((current_time - last_time) / 1000.0f);
             log_info("UI performance: %.2f fps", fps);
             frame_count = 0;
             last_time = current_time;
         }
+
+        #endif
 
         /* Sleep more when display is off to reduce CPU usage */
         if (ui_is_sleeping()) {

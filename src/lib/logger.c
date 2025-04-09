@@ -165,12 +165,11 @@ void logger_clear(void) {
  * Update the logs display in the UI
  */
 void logger_update_ui(lv_obj_t *log_container) {
+    static uint32_t last_index = 0;
     static uint32_t last_count = 0;
-    uint32_t current_count;
-    const log_entry_t *logs = logger_get_logs(&current_count);
-    
-    // Nothing new to update
-    if (current_count == last_count) {
+
+    // Use index to verify if there are new entries in the log
+    if (logger_state.current_index == last_index) {
         return;
     }
     
@@ -178,6 +177,9 @@ void logger_update_ui(lv_obj_t *log_container) {
     lv_coord_t scroll_y = lv_obj_get_scroll_y(log_container);
     
     // Only add new entries
+    uint32_t current_count;
+    const log_entry_t *logs = logger_get_logs(&current_count);
+
     for (uint32_t i = last_count; i < current_count; i++) {
         uint32_t idx = (logger_state.current_index - (current_count - i)) % MAX_LOG_ENTRIES;
         const log_entry_t *entry = &logs[idx];
@@ -201,6 +203,7 @@ void logger_update_ui(lv_obj_t *log_container) {
     
     // Update our counter
     last_count = current_count;
+    last_index = logger_state.current_index;
     
     // Restore scroll position if at bottom (auto-follow)
     lv_coord_t max_scroll = lv_obj_get_scroll_bottom(log_container);
