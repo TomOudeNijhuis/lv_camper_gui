@@ -13,7 +13,7 @@ extern "C" {
 /**
  * Internal function to set camper action
  */
-int set_camper_action_internal(const int entity_id, const char *status);
+int set_camper_action_internal(const char *entity_name, const char *status);
 
 #ifdef __cplusplus
 }

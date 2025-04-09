@@ -164,49 +164,37 @@ bool parse_camper_states(const char *json_str, camper_sensor_t *camper_data) {
     int array_len = json_object_array_length(parsed_json);
     for (int i = 0; i < array_len; i++) {
         struct json_object *state_obj = json_object_array_get_idx(parsed_json, i);
-        struct json_object *entity_id_obj, *state_value_obj;
+        struct json_object *entity_name_obj, *state_value_obj;
         
-        if (!json_object_object_get_ex(state_obj, "entity_id", &entity_id_obj) ||
+        if (!json_object_object_get_ex(state_obj, "entity_name", &entity_name_obj) ||
             !json_object_object_get_ex(state_obj, "state", &state_value_obj)) {
             continue;  // Skip if missing required fields
         }
         
-        int entity_id = json_object_get_int(entity_id_obj);
+        const char *entity_name = json_object_get_string(entity_name_obj);
         const char *state_str = json_object_get_string(state_value_obj);
         
-        // Map entity_id to the appropriate field in the camper structure
-        switch (entity_id) {
-            case 17:  // household_voltage
-                temp_camper.household_voltage = atof(state_str) / 1000.0f;  // Assuming millivolts
-                break;
-                
-            case 18:  // starter_voltage
-                temp_camper.starter_voltage = atof(state_str) / 1000.0f;  // Assuming millivolts
-                break;
-                
-            case 19:  // mains_voltage
-                temp_camper.mains_voltage = atof(state_str);
-                break;
-                
-            case 20:  // household_state
-                temp_camper.household_state = (strcmp(state_str, "ON") == 0);
-                break;
-                
-            case 21:  // water_state (as percentage 0-100)
-                temp_camper.water_state = atoi(state_str);
-                break;
-                
-            case 22:  // waste_state (as percentage 0-100)
-                temp_camper.waste_state = atoi(state_str);
-                break;
-                
-            case 23:  // pump_state
-                temp_camper.pump_state = (strcmp(state_str, "ON") == 0);
-                break;
-                
-            default:
-                // Unknown entity_id, just ignore
-                break;
+        // Map entity_name to the appropriate field in the camper structure
+        if (strcmp(entity_name, "household_voltage") == 0) {
+            temp_camper.household_voltage = atof(state_str) / 1000.0f;  // Assuming millivolts
+        }
+        else if (strcmp(entity_name, "starter_voltage") == 0) {
+            temp_camper.starter_voltage = atof(state_str) / 1000.0f;  // Assuming millivolts
+        }
+        else if (strcmp(entity_name, "mains_voltage") == 0) {
+            temp_camper.mains_voltage = atof(state_str);
+        }
+        else if (strcmp(entity_name, "household_state") == 0) {
+            temp_camper.household_state = (strcmp(state_str, "ON") == 0);
+        }
+        else if (strcmp(entity_name, "water_level") == 0) {
+            temp_camper.water_state = atoi(state_str);
+        }
+        else if (strcmp(entity_name, "waste_level") == 0) {
+            temp_camper.waste_state = atoi(state_str);
+        }
+        else if (strcmp(entity_name, "pump_state") == 0) {
+            temp_camper.pump_state = (strcmp(state_str, "ON") == 0);
         }
     }
     

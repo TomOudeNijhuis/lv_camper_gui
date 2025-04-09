@@ -34,7 +34,7 @@ static volatile bool worker_running = false;
 // Action queue
 #define MAX_ACTION_QUEUE 10
 typedef struct {
-    int entity_id;
+    char entity_name[16];
     char status[8]; // ON/OFF or other short status strings
 } camper_action_t;
 
@@ -115,14 +115,15 @@ void request_camper_data_fetch(void) {
 /**
  * Request a camper action in the background
  */
-void request_camper_action(const int entity_id, const char *status) {
+void request_camper_action(const char *entity_name, const char *status) {
     if (!worker_running) {
         log_error("Background worker not running, initialize it first");
         return;
     }
     
     camper_action_t action;
-    action.entity_id = entity_id;
+    strncpy(action.entity_name, entity_name, sizeof(action.entity_name) - 1);
+    action.entity_name[sizeof(action.entity_name) - 1] = '\0';  // Ensure null termination
     strncpy(action.status, status, sizeof(action.status) - 1);
     action.status[sizeof(action.status) - 1] = '\0';  // Ensure null termination
     
@@ -203,7 +204,7 @@ static void* background_worker_thread(void* arg) {
         
         // Handle one action from the queue
         if (dequeue_action(&action)) {
-            set_camper_action_internal(action.entity_id, action.status);
+            set_camper_action_internal(action.entity_name, action.status);
             did_work = true;
         }
         
@@ -222,7 +223,7 @@ static void* background_worker_thread(void* arg) {
  */
 static int fetch_camper_data_internal(void) {
     char api_url[MAX_URL_LENGTH];
-    snprintf(api_url, sizeof(api_url), "%s/sensors/5/states/", API_BASE_URL);
+    snprintf(api_url, sizeof(api_url), "%s/sensors/camper/states/", API_BASE_URL);
     
     http_response_t response = http_get(api_url, HTTP_TIMEOUT_SECONDS);
     
@@ -257,6 +258,37 @@ static int fetch_camper_data_internal(void) {
     return 0;
 }
 
+/**
+ * Updates a single camper entity value based on its name
+ * 
+ * @param entity_name Name of the entity to update
+ * @param state_str String representation of the state value
+ * @return true if the entity was updated, false if not found or invalid
+ */
+bool update_camper_entity(const char *entity_name, const char *state_str)
+{
+    if (!entity_name || !state_str) {
+        log_error("Invalid parameters in update_camper_entity");
+        return false;
+    }
+
+    bool updated = true;
+
+    pthread_mutex_lock(&data_mutex);
+
+    if (strcmp(entity_name, "household_state") == 0) {
+        camper.household_state = (strcmp(state_str, "ON") == 0);
+    } else if (strcmp(entity_name, "pump_state") == 0) {
+        camper.pump_state = (strcmp(state_str, "ON") == 0);
+    } else {
+        log_warning("Unknown entity name: %s", entity_name);
+        updated = false;
+    }
+
+    pthread_mutex_unlock(&data_mutex);
+
+    return updated;
+}
 /**
  * Fetch system data from the server
  */

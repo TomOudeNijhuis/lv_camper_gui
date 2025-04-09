@@ -37,12 +37,14 @@ void request_camper_data_fetch(void);
 /**
  * Request a camper action in the background
  */
-void request_camper_action(const int entity_id, const char *status);
+void request_camper_action(const char *entity_name, const char *status);
 
 /**
  * Get a copy of the current camper data
  */
 camper_sensor_t* get_camper_data(void);
+
+bool update_camper_entity(const char *entity_name, const char *status);
 
 /**
  * Get a copy of the current SmartSolar data

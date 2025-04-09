@@ -35,7 +35,7 @@ static void household_event_handler(lv_event_t *e)
     log_info("Household switch changed to: %s", status);
     
     // Request background action instead of blocking UI
-    request_camper_action(20, status);
+    request_camper_action("household_state", status);
 }
 
 static void pump_event_handler(lv_event_t *e)
@@ -47,7 +47,7 @@ static void pump_event_handler(lv_event_t *e)
     log_info("Pump switch changed to: %s", status);
     
     // Request background action instead of blocking UI
-    request_camper_action(23, status);
+    request_camper_action("pump_state", status);
 }
 
 static void update_battery_gauge(lv_obj_t *scale_line, lv_obj_t *needle_line, float voltage) {
@@ -351,7 +351,7 @@ void update_status_ui(camper_sensor_t *camper_data)
     // Update mains LED
     if (ui_mains_led) {
         // Mains is detected if voltage is above 200V (assuming European 230V system)
-        if (camper_data->mains_voltage > 200.0f) {
+        if (camper_data->mains_voltage > 6.0f) {
             lv_led_on(ui_mains_led);
             lv_led_set_color(ui_mains_led, lv_color_hex(0x00FF00)); // Green when mains connected
         } else {
