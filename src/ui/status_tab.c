@@ -15,6 +15,7 @@
 #include "../data/sensor_types.h"
 #include "../data/data_manager.h"
 #include "../main.h"
+#include "ui.h"
 
 static lv_obj_t *ui_household_switch = NULL;
 static lv_obj_t *ui_pump_switch = NULL;
@@ -25,6 +26,9 @@ static lv_obj_t *ui_starter_battery = NULL;
 static lv_obj_t *ui_starter_battery_needle = NULL;
 static lv_obj_t *ui_household_battery = NULL;
 static lv_obj_t *ui_household_battery_needle = NULL;
+static lv_timer_t *update_timer = NULL;
+
+void update_status_ui(camper_sensor_t *camper_data);
 
 static void household_event_handler(lv_event_t *e)
 {
@@ -83,6 +87,22 @@ static void update_battery_gauge(lv_obj_t *scale_line, lv_obj_t *needle_line, fl
     if(voltage_label) {
         // Update the text to show current voltage
         lv_label_set_text_fmt(voltage_label, "%.1fV", voltage);
+    }
+}
+
+/**
+ * Timer callback for data updates
+ */
+static void data_update_timer_cb(lv_timer_t *timer) {
+    if (!ui_is_sleeping()) {
+        // Request a background fetch instead of blocking
+        bool result = request_data_fetch(FETCH_CAMPER_DATA);
+        if (!result) {
+            log_warning("Failed to request data fetch");
+        }
+        
+        // Update UI with latest data regardless of whether new data is being fetched
+        update_status_ui(get_camper_data());
     }
 }
 
@@ -320,6 +340,15 @@ void create_status_tab(lv_obj_t *left_column)
     // Store references to battery gauges
     ui_starter_battery = create_battery_gauge(voltage_container, "Starter Voltage", 0, &ui_starter_battery_needle);
     ui_household_battery = create_battery_gauge(voltage_container, "Household Voltage", 0, &ui_household_battery_needle);
+
+    update_timer = lv_timer_create(data_update_timer_cb, DATA_UPDATE_INTERVAL_MS, NULL);
+}
+
+void status_tab_cleanup(void) {
+    if (update_timer != NULL) {
+        lv_timer_del(update_timer);
+        update_timer = NULL;
+    }
 }
 
 void update_status_ui(camper_sensor_t *camper_data)

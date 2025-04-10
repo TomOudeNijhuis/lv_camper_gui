@@ -31,6 +31,22 @@ static pthread_t worker_thread = 0;
 static volatile bool fetch_requested = false;
 static volatile bool worker_running = false;
 
+#define MAX_FETCH_QUEUE 20
+typedef struct {
+    fetch_request_type_t request_type;
+    uint32_t timestamp;  // For prioritization if needed
+} fetch_request_t;
+
+static fetch_request_t fetch_queue[MAX_FETCH_QUEUE];
+static volatile int fetch_queue_head = 0;
+static volatile int fetch_queue_tail = 0;
+static pthread_mutex_t fetch_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static bool is_fetch_queue_empty(void);
+static bool is_fetch_queue_full(void);
+static bool enqueue_fetch_request(fetch_request_type_t request_type);
+static bool dequeue_fetch_request(fetch_request_t *action);
+
 // Action queue
 #define MAX_ACTION_QUEUE 10
 typedef struct {
@@ -49,6 +65,9 @@ static bool is_action_queue_empty(void);
 static bool is_action_queue_full(void);
 static bool enqueue_action(const camper_action_t *action);
 static bool dequeue_action(camper_action_t *action);
+
+
+static int fetch_data_internal(fetch_request_type_t request_type);
 static int fetch_camper_data_internal(void);
 static int fetch_system_data_internal(void);
 
@@ -97,22 +116,10 @@ void shutdown_background_fetcher(void) {
  * Check if any background operation is in progress
  */
 bool is_background_busy(void) {
-    return fetch_requested || !is_action_queue_empty();
+    return !is_fetch_queue_empty() || !is_action_queue_empty();
 }
 
-/**
- * Request a new fetch operation
- */
-void request_camper_data_fetch(void) {
-    if (!worker_running) {
-        log_error("Background worker not running, initialize it first");
-        return;
-    }
-    
-    fetch_requested = true;
-}
-
-/**
+/*
  * Request a camper action in the background
  */
 void request_camper_action(const char *entity_name, const char *status) {
@@ -130,6 +137,30 @@ void request_camper_action(const char *entity_name, const char *status) {
     if (!enqueue_action(&action)) {
         log_error("Failed to queue action - queue full");
     }
+}
+
+/**
+ * Request a specific data fetch operation
+ * @param request_type Type of data to fetch
+ * @return true if request was queued successfully, false otherwise
+ */
+bool request_data_fetch(fetch_request_type_t request_type) {
+    if (!worker_running) {
+        log_error("Background worker not running, initialize it first");
+        return false;
+    }
+    
+    if (request_type >= FETCH_TYPE_COUNT) {
+        log_error("Invalid fetch request type: %d", request_type);
+        return false;
+    }
+    
+    bool queued = enqueue_fetch_request(request_type);
+    if (!queued) {
+        log_warning("Failed to queue fetch request: queue full or duplicate");
+    }
+    
+    return queued;
 }
 
 /**
@@ -184,6 +215,73 @@ static bool dequeue_action(camper_action_t *action) {
     return result;
 }
 
+static bool is_fetch_queue_empty(void) {
+    return fetch_queue_head == fetch_queue_tail;
+}
+
+static bool is_fetch_queue_full(void) {
+    return ((fetch_queue_tail + 1) % MAX_FETCH_QUEUE) == fetch_queue_head;
+}
+
+static bool enqueue_fetch_request(fetch_request_type_t request_type) {
+    bool result = false;
+    
+    pthread_mutex_lock(&fetch_mutex);
+    
+    // Check if same request is already in queue (de-duplication)
+    bool duplicate = false;
+    int i = fetch_queue_head;
+    while (i != fetch_queue_tail) {
+        if (fetch_queue[i].request_type == request_type) {
+            duplicate = true;
+            break;
+        }
+        i = (i + 1) % MAX_FETCH_QUEUE;
+    }
+    
+    if (!duplicate && !is_fetch_queue_full()) {
+        fetch_queue[fetch_queue_tail].request_type = request_type;
+        fetch_queue[fetch_queue_tail].timestamp = time(NULL);
+        fetch_queue_tail = (fetch_queue_tail + 1) % MAX_FETCH_QUEUE;
+        result = true;
+    }
+    
+    pthread_mutex_unlock(&fetch_mutex);
+    
+    return result;
+}
+
+static bool dequeue_fetch_request(fetch_request_t *request) {
+    bool result = false;
+    time_t current_time = time(NULL);
+
+    pthread_mutex_lock(&fetch_mutex);
+    
+    while (!is_fetch_queue_empty()) {
+        *request = fetch_queue[fetch_queue_head];
+
+        // Check if the request is stale
+        if (current_time - request->timestamp > REQUEST_TIMEOUT_SECONDS) {
+            // Log that we're skipping a stale request
+            log_warning("Skipping stale request type %d (age: %ld seconds)", 
+                    request->request_type, 
+                    current_time - request->timestamp);
+            
+            // Move to the next request
+            fetch_queue_head = (fetch_queue_head + 1) % MAX_FETCH_QUEUE;
+            continue;
+        }
+
+        fetch_queue_head = (fetch_queue_head + 1) % MAX_FETCH_QUEUE;
+        result = true;
+        break;
+    }
+    
+    pthread_mutex_unlock(&fetch_mutex);
+    
+    return result;
+}
+
 /**
  * Background thread function that handles work requests
  */
@@ -191,14 +289,14 @@ static void* background_worker_thread(void* arg) {
     log_info("Background worker thread started");
     
     camper_action_t action;
-    
+    fetch_request_t fetch_request;
+
     while (worker_running) {
         bool did_work = false;
         
-        // Handle fetch request
-        if (fetch_requested) {
-            fetch_requested = false;
-            fetch_camper_data_internal();
+        // Handle one fetch request from the queue
+        if (dequeue_fetch_request(&fetch_request)) {
+            fetch_data_internal(fetch_request.request_type);
             did_work = true;
         }
         
@@ -216,6 +314,19 @@ static void* background_worker_thread(void* arg) {
     
     log_info("Background worker thread exiting");
     return NULL;
+}
+
+/**
+ * Internal function to fetch specific sensor data based on request type
+ */
+static int fetch_data_internal(fetch_request_type_t request_type) {
+    switch(request_type) {
+        case FETCH_CAMPER_DATA:
+            return fetch_camper_data_internal();
+        default:
+            log_warning("Unimplemented fetch request type: %d", request_type);
+            return -1;
+    }
 }
 
 /**

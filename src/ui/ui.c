@@ -25,7 +25,6 @@
 static bool is_sleeping = false;
 static lv_obj_t *sleep_overlay = NULL;
 static lv_timer_t *inactivity_timer = NULL;
-static lv_timer_t *update_timer = NULL;
 #ifdef LV_CAMPER_DEBUG
 static lv_timer_t *memory_monitor_timer = NULL;
 static lv_timer_t *leak_check_timer = NULL;
@@ -37,7 +36,6 @@ extern SDL_Renderer *renderer;
 // Forward declaration
 static void on_wake_event(lv_event_t *e);
 static void inactivity_timer_cb(lv_timer_t *timer);
-static void data_update_timer_cb(lv_timer_t *timer);
 
 #ifdef LV_CAMPER_DEBUG
 /**
@@ -224,19 +222,6 @@ void ui_reset_inactivity_timer(void) {
 }
 
 /**
- * Timer callback for data updates
- */
-static void data_update_timer_cb(lv_timer_t *timer) {
-    if (!ui_is_sleeping() && !is_background_busy()) {
-        // Request a background fetch instead of blocking
-        request_camper_data_fetch();
-        
-        // Update UI with latest data regardless of whether new data is being fetched
-        update_status_ui(get_camper_data());
-    }
-}
-
-/**
  * Cleanup UI resources - should be called before exiting the application
  */
 void ui_cleanup(void) {
@@ -249,11 +234,6 @@ void ui_cleanup(void) {
     if (inactivity_timer != NULL) {
         lv_timer_del(inactivity_timer);
         inactivity_timer = NULL;
-    }
-    
-    if (update_timer != NULL) {
-        lv_timer_del(update_timer);
-        update_timer = NULL;
     }
     
     // Delete sleep overlay if it exists
@@ -410,7 +390,6 @@ void create_ui(void)
 
     // Create inactivity timer to automatically enter sleep mode
     inactivity_timer = lv_timer_create(inactivity_timer_cb, DISPLAY_INACTIVITY_TIMEOUT_MS, NULL);
-    update_timer = lv_timer_create(data_update_timer_cb, DATA_UPDATE_INTERVAL_MS, NULL);
     
 #ifdef LV_CAMPER_DEBUG
     // Create memory monitoring timer

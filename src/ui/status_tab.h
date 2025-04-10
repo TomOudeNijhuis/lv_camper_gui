@@ -18,8 +18,7 @@ extern "C" {
  * @description Creates a tabview with Status, Analytics, and Logs tabs
  */
 void create_status_tab(lv_obj_t *left_column);
-
-void update_status_ui(camper_sensor_t *camper_data);
+void status_tab_cleanup(void);
 
 #ifdef __cplusplus
 }

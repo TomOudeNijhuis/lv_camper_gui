@@ -13,6 +13,19 @@
 extern "C" {
 #endif
 
+#define REQUEST_TIMEOUT_SECONDS 30  // Discard requests older than 30 seconds
+
+typedef enum {
+    FETCH_CAMPER_DATA = 0,
+    FETCH_SYSTEM_DATA,
+    FETCH_SMART_SOLAR,
+    FETCH_SMART_SHUNT,
+    FETCH_CLIMATE_INSIDE,
+    FETCH_CLIMATE_OUTSIDE,
+    // Add more data types as needed
+    FETCH_TYPE_COUNT  // Keep this last - used to validate request types
+} fetch_request_type_t;
+
 /**
  * Initialize the background worker system
  * @return 0 on success, non-zero on failure
@@ -32,7 +45,7 @@ bool is_background_busy(void);
 /**
  * Request a new fetch operation
  */
-void request_camper_data_fetch(void);
+bool request_data_fetch(fetch_request_type_t request_type);
 
 /**
  * Request a camper action in the background
