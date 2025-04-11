@@ -195,11 +195,9 @@ int main(int argc, char **argv)
     /* Create a Demo */
     create_ui();
 
-    // Print initial memory state
-    ui_print_memory_usage();
-
     #ifdef LV_CAMPER_DEBUG
 
+    ui_print_memory_usage();
     mem_debug_print_stats();
 
     #endif

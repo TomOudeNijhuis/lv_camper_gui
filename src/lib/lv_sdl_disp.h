@@ -25,6 +25,15 @@ void lv_port_disp_deinit(void);
 int drm_blank_display(SDL_Window *window, int blank);
 
 /**
+ * Set display backlight brightness
+ * 
+ * @param window SDL window to get DRM fd from
+ * @param percent Brightness percentage (0-100)
+ * @return 0 on success, -1 on failure or no backlight control available
+ */
+int drm_set_brightness(SDL_Window *window, int percent);
+
+/**
  * Create an SDL mouse input device
  * @return pointer to the created input device or NULL on failure
  */

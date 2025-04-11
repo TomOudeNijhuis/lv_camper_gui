@@ -53,9 +53,12 @@ static void disp_flush(lv_display_t * disp, const lv_area_t * area, uint8_t * px
 static int get_sdl_drm_fd(SDL_Window *window);
 static uint32_t find_dpms_property_id(int drm_fd, drmModeConnector *conn);
 static int drm_set_dpms(int drm_fd, drmModeConnector *conn, int off);
+static uint32_t find_backlight_property_id(int drm_fd, drmModeConnector *conn, uint64_t *min_val, uint64_t *max_val);
+static int drm_set_backlight_level(int drm_fd, drmModeConnector *conn, int percent);
 static void sdl_mouse_read(lv_indev_t * indev, lv_indev_data_t * data);
 static void sdl_touch_read(lv_indev_t * indev, lv_indev_data_t * data);
 static void printWMInfo(SDL_Window *window);
+
 /**********************
  *   DISPLAY FUNCTIONS
  **********************/
@@ -358,6 +361,120 @@ int drm_blank_display(SDL_Window *window, int blank)
         if (conn->connection == DRM_MODE_CONNECTED && conn->count_modes > 0) {
             // Found an active connector, set DPMS
             if (drm_set_dpms(drm_fd, conn, blank) == 0) {
+                rv = 0;
+            }
+        }
+        drmModeFreeConnector(conn);
+    }
+
+    drmModeFreeResources(res);
+    return rv;
+}
+
+/**
+ * Find the backlight property ID for a given connector
+ */
+static uint32_t find_backlight_property_id(int drm_fd, drmModeConnector *conn, uint64_t *min_val, uint64_t *max_val) {
+    drmModeObjectProperties *props =
+        drmModeObjectGetProperties(drm_fd, conn->connector_id, DRM_MODE_OBJECT_CONNECTOR);
+    if (!props) {
+        log_error("drmModeObjectGetProperties failed: %s", strerror(errno));
+        return 0;
+    }
+
+    // Search properties for "Backlight" or "brightness"
+    uint32_t backlight_prop_id = 0;
+    for (uint32_t i = 0; i < props->count_props; i++) {
+        drmModePropertyRes *prop = drmModeGetProperty(drm_fd, props->props[i]);
+        if (prop) {
+            if (strcmp(prop->name, "Backlight") == 0 || 
+                strcmp(prop->name, "brightness") == 0) {
+                backlight_prop_id = prop->prop_id;
+                
+                // Get the range of backlight values
+                if (prop->flags & DRM_MODE_PROP_RANGE) {
+                    if (min_val) *min_val = prop->values[0];
+                    if (max_val) *max_val = prop->values[1];
+                    log_debug("Backlight range: %lu - %lu", prop->values[0], prop->values[1]);
+                }
+                
+                drmModeFreeProperty(prop);
+                break;
+            }
+            drmModeFreeProperty(prop);
+        }
+    }
+
+    drmModeFreeObjectProperties(props);
+    return backlight_prop_id;
+}
+
+/**
+ * Set the backlight brightness level for a connector
+ * 
+ * @param drm_fd DRM file descriptor
+ * @param conn DRM connector
+ * @param percent Brightness percentage (0-100)
+ * @return 0 on success, -1 on failure
+ */
+static int drm_set_backlight_level(int drm_fd, drmModeConnector *conn, int percent) {
+    // Clamp percentage to valid range 0-100
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+    
+    uint64_t min_val = 0, max_val = 0;
+    uint32_t backlight_prop_id = find_backlight_property_id(drm_fd, conn, &min_val, &max_val);
+    
+    if (backlight_prop_id == 0) {
+        log_error("Backlight property not found on connector %u", conn->connector_id);
+        return -1;
+    }
+    
+    // Calculate the actual brightness value within the supported range
+    uint64_t range = max_val - min_val;
+    uint64_t brightness_val = min_val + ((range * percent) / 100);
+    
+    int ret = drmModeConnectorSetProperty(drm_fd, conn->connector_id, backlight_prop_id, brightness_val);
+    if (ret != 0) {
+        log_error("Failed to set backlight brightness to %d%% (value=%lu) on connector %u: %s (err=%d)",
+                percent, brightness_val, conn->connector_id, strerror(errno), ret);
+        return -1;
+    }
+    
+    log_info("Set backlight brightness to %d%% (value=%lu) on connector %u", 
+             percent, brightness_val, conn->connector_id);
+    return 0;
+}
+
+/**
+ * Set display backlight brightness
+ * 
+ * @param window SDL window to get DRM fd from
+ * @param percent Brightness percentage (0-100)
+ * @return 0 on success, -1 on failure or no backlight control available
+ */
+int drm_set_brightness(SDL_Window *window, int percent) {
+    int drm_fd = get_sdl_drm_fd(window);
+    if (drm_fd < 0) {
+        return -1;
+    }
+
+    drmModeRes *res = drmModeGetResources(drm_fd);
+    if (!res) {
+        log_error("drmModeGetResources failed: %s", strerror(errno));
+        return -1;
+    }
+
+    int i;
+    int rv = -1;
+    // Try all connectors
+    for (i = 0; i < res->count_connectors; i++) {
+        drmModeConnector *conn = drmModeGetConnector(drm_fd, res->connectors[i]);
+        if (!conn) continue;
+
+        if (conn->connection == DRM_MODE_CONNECTED && conn->count_modes > 0) {
+            // Found an active connector, set backlight
+            if (drm_set_backlight_level(drm_fd, conn, percent) == 0) {
                 rv = 0;
             }
         }

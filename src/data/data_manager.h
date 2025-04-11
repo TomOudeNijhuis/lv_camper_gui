@@ -14,6 +14,8 @@ extern "C" {
 #endif
 
 #define REQUEST_TIMEOUT_SECONDS 30  // Discard requests older than 30 seconds
+#define MAX_URL_LENGTH           256   /* Maximum URL length */
+#define MAX_JSON_ACTION_PAYLOAD_LENGTH  128   /* Maximum JSON payload length */
 
 typedef enum {
     FETCH_CAMPER_DATA = 0,

@@ -19,12 +19,14 @@
 #include "../main.h"
 #include "../data/data_manager.h"
 #include "../lib/mem_debug.h"
+#include "lv_awesome_16.h"
 
 
 // Add at the top with other static variables
 static bool is_sleeping = false;
 static lv_obj_t *sleep_overlay = NULL;
 static lv_timer_t *inactivity_timer = NULL;
+static bool is_night_mode = false;
 #ifdef LV_CAMPER_DEBUG
 static lv_timer_t *memory_monitor_timer = NULL;
 static lv_timer_t *leak_check_timer = NULL;
@@ -36,6 +38,8 @@ extern SDL_Renderer *renderer;
 // Forward declaration
 static void on_wake_event(lv_event_t *e);
 static void inactivity_timer_cb(lv_timer_t *timer);
+static void brightness_button_event_handler(lv_event_t *e);  // New handler declaration
+static void exit_timer_cb(lv_timer_t *timer);  // Forward declaration of the new exit timer callback
 
 #ifdef LV_CAMPER_DEBUG
 /**
@@ -222,6 +226,39 @@ void ui_reset_inactivity_timer(void) {
 }
 
 /**
+ * Handles toggling between day and night mode
+ */
+static void brightness_button_event_handler(lv_event_t *e) {
+    lv_obj_t *btn = lv_event_get_target(e);
+    lv_obj_t *label = lv_obj_get_child(btn, 0);
+    
+    // Toggle the mode
+    is_night_mode = !is_night_mode;
+    
+    // Set brightness according to mode
+    int brightness = is_night_mode ? NIGHT_MODE_BRIGHTNESS : DAY_MODE_BRIGHTNESS;
+    int result = drm_set_brightness(window, brightness);
+    if (result != 0) {
+        log_error("Could not switch to %s mode", is_night_mode ? "night" : "day");
+
+        // Toggle back
+        is_night_mode = !is_night_mode;
+
+        return;
+    }
+    
+    // Update the button icon
+    if (is_night_mode) {
+        lv_label_set_text(label, LV_SYMBOL_MOON);
+    } else {
+        lv_label_set_text(label, LV_SYMBOL_SUN);
+    }
+    
+    log_info("Switched to %s mode, brightness: %d%%", 
+             is_night_mode ? "night" : "day", brightness);
+}
+
+/**
  * Cleanup UI resources - should be called before exiting the application
  */
 void ui_cleanup(void) {
@@ -274,12 +311,55 @@ static void sleep_button_event_handler(lv_event_t *e) {
 }
 
 static void exit_button_event_handler(lv_event_t *e) {
-    log_info("Exit button pressed, shutting down application");
+    log_info("Exit button pressed, showing shutdown popup");
+    
+    // Create a popup message
+    lv_obj_t *popup = lv_obj_create(lv_screen_active());
+    lv_obj_set_size(popup, LV_PCT(50), LV_PCT(30));
+    lv_obj_center(popup);
+    lv_obj_set_style_bg_color(popup, lv_color_hex(0x333333), 0);
+    lv_obj_set_style_border_color(popup, lv_color_hex(0x666666), 0);
+    lv_obj_set_style_border_width(popup, 2, 0);
+    lv_obj_set_style_radius(popup, 10, 0);
+    lv_obj_set_style_shadow_width(popup, 20, 0);
+    lv_obj_set_style_shadow_opa(popup, LV_OPA_50, 0);
+    
+    // Add a label with the shutdown message
+    lv_obj_t *label = lv_label_create(popup);
+    lv_label_set_text(label, "Stopping background workers...");
+    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 30);
+    
+    // Create a spinner to show activity
+    lv_obj_t *spinner = lv_spinner_create(popup);
+    lv_obj_set_size(spinner, 50, 50);
+    lv_obj_align(spinner, LV_ALIGN_BOTTOM_MID, 0, -20);
+    
+    // Force immediate redraw to show popup
+    lv_refr_now(NULL);
+    
+    // Create a timer to exit after a short delay (1500ms)
+    lv_timer_t *exit_timer = lv_timer_create(exit_timer_cb, 1500, NULL);
+    
+    // Store the popup reference in the timer user data
+    lv_timer_set_user_data(exit_timer, popup);
+}
+
+/**
+ * Timer callback to exit the application after showing the popup
+ */
+static void exit_timer_cb(lv_timer_t *timer) {
+    // Delete the popup
+    lv_obj_t *popup = (lv_obj_t *)lv_timer_get_user_data(timer);
+    if (popup) {
+        lv_obj_del(popup);
+    }
     
     // Clean up UI resources
     ui_cleanup();
     
     // Exit the application
+    log_info("Exiting application");
     exit(0);
 }
 
@@ -308,6 +388,25 @@ void create_ui(void)
 
     // Get the tab bar (btns container)
     lv_obj_t *tab_btns = lv_tabview_get_tab_btns(tabview);
+    
+    // Create brightness toggle button (day/night mode)
+    lv_obj_t *brightness_btn = lv_btn_create(tab_btns);
+    lv_obj_set_width(brightness_btn, 50);
+    lv_obj_set_height(brightness_btn, LV_PCT(100));
+    lv_obj_align(brightness_btn, LV_ALIGN_RIGHT_MID, -115, 0);  // Position left of sleep button
+    lv_obj_set_style_radius(brightness_btn, 0, 0);
+    lv_obj_set_style_bg_color(brightness_btn, lv_color_hex(0xFFA500), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(brightness_btn, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(brightness_btn, lv_color_hex(0xE67300), LV_PART_MAIN | LV_STATE_PRESSED);
+    
+    // Add brightness icon (sun for day mode, which is default)
+    lv_obj_t *brightness_label = lv_label_create(brightness_btn);
+    lv_obj_set_style_text_font(brightness_label, &lv_awesome_16, 0);  // Use the custom font
+    lv_label_set_text(brightness_label, LV_SYMBOL_SUN);
+    lv_obj_center(brightness_label);
+    
+    // Add event handler for brightness button
+    lv_obj_add_event_cb(brightness_btn, brightness_button_event_handler, LV_EVENT_CLICKED, NULL);
     
     // Create a sleep button 
     lv_obj_t *sleep_btn = lv_btn_create(tab_btns);

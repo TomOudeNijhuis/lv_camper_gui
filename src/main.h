@@ -20,7 +20,7 @@ extern "C" {
  * Uncomment the following line to enable debug mode with additional 
  * logging, memory tracking, and developer features
  */
-#define LV_CAMPER_DEBUG
+//#define LV_CAMPER_DEBUG
 
 /* Application version information */
 #define APP_VERSION_MAJOR    1
@@ -50,6 +50,9 @@ extern "C" {
 /* Display power management */
 #define DISPLAY_INACTIVITY_TIMEOUT_MS   120000  /* Time until screen blanks in ms */
 
+#define DAY_MODE_BRIGHTNESS 100     // Day mode brightness percentage
+#define NIGHT_MODE_BRIGHTNESS 40    // Night mode brightness percentage
+
 /****************************************************************************
  * Network Constants
  ****************************************************************************/
@@ -74,10 +77,6 @@ extern "C" {
 /****************************************************************************
  * Other Application Constants
  ****************************************************************************/
-
-/* Maximum lengths */
-#define MAX_URL_LENGTH           256   /* Maximum URL length */
-#define MAX_JSON_ACTION_PAYLOAD_LENGTH  128   /* Maximum JSON payload length */
 
 /* Status indicators */
 #define WATER_LOW_THRESHOLD      20    /* Water low warning threshold (%) */
