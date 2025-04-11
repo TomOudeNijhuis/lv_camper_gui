@@ -470,7 +470,7 @@ void create_ui(void)
     
     // Create tabs
     lv_obj_t *tab_status = lv_tabview_add_tab(tabview, "Status"); 
-    lv_obj_t *tab_analytics = lv_tabview_add_tab(tabview, "Analytics");
+    // lv_obj_t *tab_analytics = lv_tabview_add_tab(tabview, "Analytics");
     lv_obj_t *tab_logs = lv_tabview_add_tab(tabview, "Logs");
 
     // Get the tab bar (btns container)
@@ -566,7 +566,7 @@ void create_ui(void)
     // Create content for each tab
     create_status_column(left_column);    
     create_energy_temp_panel(right_column);
-    create_analytics_tab(tab_analytics);
+    // create_analytics_tab(tab_analytics);
     create_logs_tab(tab_logs);
 
     // Create inactivity timer to automatically enter sleep mode
