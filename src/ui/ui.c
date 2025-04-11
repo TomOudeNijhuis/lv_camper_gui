@@ -13,6 +13,7 @@
 #include "status_column.h"
 #include "logs_tab.h"
 #include "analytics_tab.h"
+#include "energy_temp_panel.h"  // Add this new include
 #include "../lib/logger.h"
 #include "lvgl/lvgl.h"
 #include "../lib/lv_sdl_disp.h"
@@ -268,6 +269,7 @@ void ui_cleanup(void) {
     shutdown_background_fetcher();
     
     status_column_cleanup();
+    energy_temp_panel_cleanup();  // Add cleanup for energy panel
 
     // Delete timers
     if (inactivity_timer != NULL) {
@@ -478,14 +480,9 @@ void create_ui(void)
     lv_obj_set_flex_align(right_column, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(right_column, 8, 0);
     
-    // Add a placeholder label to the right column
-    lv_obj_t *placeholder = lv_label_create(right_column);
-    lv_label_set_text(placeholder, "Future Content Area");
-    lv_obj_set_style_text_color(placeholder, lv_color_hex(0x888888), 0); // Light gray text
-    lv_obj_align(placeholder, LV_ALIGN_CENTER, 0, 0);
- 
     // Create content for each tab
     create_status_column(left_column);    
+    create_energy_temp_panel(right_column);
     create_analytics_tab(tab_analytics);
     create_logs_tab(tab_logs);
 
