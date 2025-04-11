@@ -46,7 +46,7 @@ docker compose run --remove-orphans cross-build
 
 with shell:
 ```bash
-docker compose run cross-shell --remove-orphans
+docker compose run cross-shell
 ```
 
 inside container:

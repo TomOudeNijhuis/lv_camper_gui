@@ -41,6 +41,7 @@ static void on_wake_event(lv_event_t *e);
 static void inactivity_timer_cb(lv_timer_t *timer);
 static void brightness_button_event_handler(lv_event_t *e);  // New handler declaration
 static void exit_timer_cb(lv_timer_t *timer);  // Forward declaration of the new exit timer callback
+static void apply_style_recursive(lv_obj_t *obj, lv_style_t *text_style, lv_style_t *card_style, bool dark_mode);
 
 #ifdef LV_CAMPER_DEBUG
 /**
@@ -227,6 +228,101 @@ void ui_reset_inactivity_timer(void) {
 }
 
 /**
+ * Apply dark or light theme to the UI
+ */
+static void apply_theme_mode(bool dark_mode) {
+    // Get the current theme
+    lv_theme_t *theme = lv_theme_get_from_obj(lv_screen_active());
+    
+    // Set color scheme based on mode
+    lv_color_t primary_color = dark_mode ? lv_color_hex(0x3050C8) : lv_color_hex(0x3078FF);
+    lv_color_t bg_color = dark_mode ? lv_color_hex(0x202020) : lv_color_hex(0xEEEEEE);
+    lv_color_t text_color = dark_mode ? lv_color_hex(0xDDDDDD) : lv_color_hex(0x333333);
+    lv_color_t card_bg_color = dark_mode ? lv_color_hex(0x303030) : lv_color_hex(0xFFFFFF);
+    
+    // Apply colors to screen
+    lv_obj_set_style_bg_color(lv_screen_active(), bg_color, 0);
+    
+    // Create a style for text
+    static lv_style_t style_text;
+    lv_style_init(&style_text);
+    lv_style_set_text_color(&style_text, text_color);
+    
+    // Create a style for cards/containers
+    static lv_style_t style_card;
+    lv_style_init(&style_card);
+    lv_style_set_bg_color(&style_card, card_bg_color);
+    lv_style_set_border_color(&style_card, dark_mode ? 
+                              lv_color_hex(0x404040) : lv_color_hex(0xDDDDDD));
+    
+    // Apply the style to all children using the public API
+    uint32_t child_count = lv_obj_get_child_count(lv_screen_active());
+    for(uint32_t i = 0; i < child_count; i++) {
+        lv_obj_t *child = lv_obj_get_child(lv_screen_active(), i);
+        if(child == NULL) continue;
+        
+        // Skip non-visible children
+        if(lv_obj_has_flag(child, LV_OBJ_FLAG_HIDDEN)) continue;
+        
+        // Apply text style to all children recursively
+        apply_style_recursive(child, &style_text, &style_card, dark_mode);
+    }
+    
+    log_info("Applied %s mode theme", dark_mode ? "dark" : "light");
+}
+
+/**
+ * Recursively apply styles to an object and its children
+ */
+static void apply_style_recursive(lv_obj_t *obj, lv_style_t *text_style, 
+                                 lv_style_t *card_style, bool dark_mode) {
+    // Apply card style to containers
+    if(lv_obj_check_type(obj, &lv_obj_class) || 
+       lv_obj_check_type(obj, &lv_tabview_class)) {
+        lv_obj_add_style(obj, card_style, 0);
+    }
+    
+    // Apply text style to labels
+    if(lv_obj_check_type(obj, &lv_label_class)) {
+        lv_obj_add_style(obj, text_style, 0);
+    }
+
+    // Handle gauge widgets (if available in your LVGL version)
+    if(lv_obj_has_class(obj, &lv_chart_class) || 
+       lv_obj_has_class(obj, &lv_bar_class) ||
+       lv_obj_has_class(obj, &lv_scale_class)) {
+        
+        lv_color_t indicator_color = dark_mode ? lv_color_white() : lv_color_black();
+        
+        // Apply colors to indicators
+        lv_obj_set_style_line_color(obj, indicator_color, LV_PART_INDICATOR);
+        lv_obj_set_style_line_color(obj, indicator_color, LV_PART_ITEMS);
+        
+        // Set text color for any labels within the chart/gauge
+        lv_obj_set_style_text_color(obj, indicator_color, LV_PART_ITEMS);
+
+        lv_obj_set_style_text_color(obj, indicator_color, LV_PART_MAIN);
+     
+    }
+    
+    // Handle sliders that might use scales
+    if(lv_obj_check_type(obj, &lv_slider_class) || lv_obj_check_type(obj, &lv_bar_class)) {
+        lv_color_t indicator_color = dark_mode ? lv_color_white() : lv_color_black();
+        lv_obj_set_style_border_color(obj, indicator_color, LV_PART_INDICATOR);
+        lv_obj_set_style_border_color(obj, indicator_color, LV_PART_KNOB);
+        
+        // Set tick color if slider has them
+        lv_obj_set_style_line_color(obj, indicator_color, LV_PART_ITEMS);
+    }
+
+    // Apply to children recursively
+    uint32_t i;
+    for(i = 0; i < lv_obj_get_child_count(obj); i++) {
+        apply_style_recursive(lv_obj_get_child(obj, i), text_style, card_style, dark_mode);
+    }
+}
+
+/**
  * Handles toggling between day and night mode
  */
 static void brightness_button_event_handler(lv_event_t *e) {
@@ -235,28 +331,15 @@ static void brightness_button_event_handler(lv_event_t *e) {
     
     // Toggle the mode
     is_night_mode = !is_night_mode;
-    
-    // Set brightness according to mode
-    int brightness = is_night_mode ? NIGHT_MODE_BRIGHTNESS : DAY_MODE_BRIGHTNESS;
-    int result = drm_set_brightness(window, brightness);
-    if (result != 0) {
-        log_error("Could not switch to %s mode", is_night_mode ? "night" : "day");
-
-        // Toggle back
-        is_night_mode = !is_night_mode;
-
-        return;
-    }
-    
+       
     // Update the button icon
     if (is_night_mode) {
         lv_label_set_text(label, LV_SYMBOL_MOON);
     } else {
         lv_label_set_text(label, LV_SYMBOL_SUN);
     }
-    
-    log_info("Switched to %s mode, brightness: %d%%", 
-             is_night_mode ? "night" : "day", brightness);
+
+    apply_theme_mode(is_night_mode);
 }
 
 /**
