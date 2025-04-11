@@ -1,9 +1,9 @@
 /*******************************************************************
  *
- * status_tab.c - Status tab UI implementation for the Camper GUI
+ * status_column.c - Status tab UI implementation for the Camper GUI
  *
  ******************************************************************/
-#include "status_tab.h"
+#include "status_column.h"
 #include <curl/curl.h>
 #include <stdlib.h>
 #include <string.h>
@@ -250,7 +250,7 @@ static lv_obj_t* create_level_bar(lv_obj_t *parent, const char *label_text, int 
     return bar;
 }
 
-void create_status_tab(lv_obj_t *left_column)
+void create_status_column(lv_obj_t *left_column)
 {
     // Set up left column as a vertical container
     lv_obj_set_flex_flow(left_column, LV_FLEX_FLOW_COLUMN);
@@ -344,7 +344,7 @@ void create_status_tab(lv_obj_t *left_column)
     update_timer = lv_timer_create(data_update_timer_cb, DATA_UPDATE_INTERVAL_MS, NULL);
 }
 
-void status_tab_cleanup(void) {
+void status_column_cleanup(void) {
     if (update_timer != NULL) {
         lv_timer_del(update_timer);
         update_timer = NULL;

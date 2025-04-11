@@ -3,8 +3,8 @@
  * ui.h - User interface definitions for the Camper GUI
  *
  ******************************************************************/
-#ifndef STATUS_TAB_H
-#define STATUS_TAB_H
+#ifndef STATUS_COLUMN_H
+#define STATUS_COLUMN_H
 
 #include "lvgl/lvgl.h"
 #include "../data/sensor_types.h"
@@ -17,11 +17,11 @@ extern "C" {
  * @brief Creates the main application UI
  * @description Creates a tabview with Status, Analytics, and Logs tabs
  */
-void create_status_tab(lv_obj_t *left_column);
-void status_tab_cleanup(void);
+void create_status_column(lv_obj_t *left_column);
+void status_column_cleanup(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* UI_H */
+#endif /* STATUS_COLUMN_H */

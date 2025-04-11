@@ -10,7 +10,7 @@
 #include <SDL2/SDL.h>
 
 #include "ui.h"
-#include "status_tab.h"
+#include "status_column.h"
 #include "logs_tab.h"
 #include "analytics_tab.h"
 #include "../lib/logger.h"
@@ -267,6 +267,8 @@ void ui_cleanup(void) {
     // Shutdown the background fetcher
     shutdown_background_fetcher();
     
+    status_column_cleanup();
+
     // Delete timers
     if (inactivity_timer != NULL) {
         lv_timer_del(inactivity_timer);
@@ -483,7 +485,7 @@ void create_ui(void)
     lv_obj_align(placeholder, LV_ALIGN_CENTER, 0, 0);
  
     // Create content for each tab
-    create_status_tab(left_column);    
+    create_status_column(left_column);    
     create_analytics_tab(tab_analytics);
     create_logs_tab(tab_logs);
 
