@@ -24,7 +24,7 @@ typedef enum {
     FETCH_SMART_SHUNT,
     FETCH_CLIMATE_INSIDE,
     FETCH_CLIMATE_OUTSIDE,
-    // Add more data types as needed
+    FETCH_ENTITY_HISTORY,
     FETCH_TYPE_COUNT  // Keep this last - used to validate request types
 } fetch_request_type_t;
 
@@ -80,6 +80,34 @@ climate_sensor_t* get_inside_climate_data(void);
  * Get a copy of the current outside climate data
  */
 climate_sensor_t* get_outside_climate_data(void);
+
+void clear_entity_history(entity_history_t *history);
+
+/**
+ * Request entity history data
+ */
+bool request_entity_history(const char *sensor_name, const char *entity_name, 
+                           const char *interval, int samples);
+
+/**
+ * Get a copy of the current entity history data
+ */
+entity_history_t* get_entity_history_data(void);
+
+/**
+ * Free the memory allocated for entity history data
+ */
+void free_entity_history_data(entity_history_t *history);
+
+/**
+ * History request parameters
+ */
+typedef struct {
+    char sensor_name[32];
+    char entity_name[32];
+    char interval[16];
+    int samples;
+} history_request_t;
 
 #ifdef __cplusplus
 }

@@ -264,3 +264,165 @@ bool parse_camper_states(const char *json_str, camper_sensor_t *camper_data) {
     
     return true;
 }
+
+/**
+ * Parse entity history JSON response
+ * @param json_str The JSON string to parse
+ * @param history Pointer to entity_history_t structure to fill
+ * @return true if parsing succeeded, false otherwise
+ */
+bool parse_entity_history(const char *json_str, entity_history_t *history) {
+    if (!json_str || !history) {
+        return false;
+    }
+    
+    // Clear any existing data
+    clear_entity_history(history);
+    
+    struct json_object *parsed_json = json_tokener_parse(json_str);
+    if (!parsed_json) {
+        log_error("Failed to parse history JSON");
+        return false;
+    }
+    
+    bool success = false;
+    
+    do {
+        // Parse basic fields
+        struct json_object *is_numeric_json;
+        if (!json_object_object_get_ex(parsed_json, "is_numeric", &is_numeric_json)) {
+            log_error("Missing is_numeric field in history JSON");
+            break;
+        }
+        history->is_numeric = json_object_get_boolean(is_numeric_json);
+        
+        struct json_object *entity_name_json;
+        if (json_object_object_get_ex(parsed_json, "entity_name", &entity_name_json) && 
+            json_object_is_type(entity_name_json, json_type_string)) {
+            const char *entity_name = json_object_get_string(entity_name_json);
+            strncpy(history->entity_name, entity_name, sizeof(history->entity_name) - 1);
+            history->entity_name[sizeof(history->entity_name) - 1] = '\0';
+        }
+        
+        struct json_object *unit_json;
+        if (json_object_object_get_ex(parsed_json, "unit", &unit_json) && 
+            json_object_is_type(unit_json, json_type_string)) {
+            const char *unit = json_object_get_string(unit_json);
+            strncpy(history->unit, unit, sizeof(history->unit) - 1);
+            history->unit[sizeof(history->unit) - 1] = '\0';
+        } else {
+            history->unit[0] = '\0';  // No unit or null
+        }
+        
+        // Get the data object
+        struct json_object *data_json;
+        if (!json_object_object_get_ex(parsed_json, "data", &data_json) || 
+            !json_object_is_type(data_json, json_type_object)) {
+            log_error("Missing or invalid data object in history JSON");
+            break;
+        }
+        
+        // Parse timestamps array
+        struct json_object *timestamps_json;
+        if (!json_object_object_get_ex(data_json, "timestamps", &timestamps_json) || 
+            !json_object_is_type(timestamps_json, json_type_array)) {
+            log_error("Missing or invalid timestamps array in history JSON");
+            break;
+        }
+        
+        int count = json_object_array_length(timestamps_json);
+        if (count <= 0) {
+            log_error("Empty timestamps array in history JSON");
+            break;
+        }
+        
+        history->count = count;
+        history->timestamps = (char**)malloc(count * sizeof(char*));
+        if (!history->timestamps) {
+            log_error("Failed to allocate memory for timestamps");
+            break;
+        }
+        memset(history->timestamps, 0, count * sizeof(char*));
+        
+        // Allocate memory for data arrays
+        history->min = (float*)malloc(count * sizeof(float));
+        history->max = (float*)malloc(count * sizeof(float));
+        history->mean = (float*)malloc(count * sizeof(float));
+        
+        if (!history->min || !history->max || !history->mean) {
+            log_error("Failed to allocate memory for data arrays");
+            break;
+        }
+        
+        // Parse timestamps
+        for (int i = 0; i < count; i++) {
+            struct json_object *timestamp_item = json_object_array_get_idx(timestamps_json, i);
+            if (json_object_is_type(timestamp_item, json_type_string)) {
+                const char *timestamp_str = json_object_get_string(timestamp_item);
+                history->timestamps[i] = strdup(timestamp_str);
+                if (!history->timestamps[i]) {
+                    log_error("Failed to duplicate timestamp string");
+                    break;
+                }
+            } else {
+                log_error("Invalid timestamp at index %d", i);
+                break;
+            }
+        }
+        
+        // Parse min values
+        struct json_object *min_json;
+        if (json_object_object_get_ex(data_json, "min", &min_json) && 
+            json_object_is_type(min_json, json_type_array) && 
+            json_object_array_length(min_json) == count) {
+            for (int i = 0; i < count; i++) {
+                struct json_object *item = json_object_array_get_idx(min_json, i);
+                history->min[i] = json_object_is_type(item, json_type_double) ? 
+                    json_object_get_double(item) : 0.0f;
+            }
+        } else {
+            log_error("Invalid min array in history JSON");
+            break;
+        }
+        
+        // Parse max values
+        struct json_object *max_json;
+        if (json_object_object_get_ex(data_json, "max", &max_json) && 
+            json_object_is_type(max_json, json_type_array) && 
+            json_object_array_length(max_json) == count) {
+            for (int i = 0; i < count; i++) {
+                struct json_object *item = json_object_array_get_idx(max_json, i);
+                history->max[i] = json_object_is_type(item, json_type_double) ? 
+                    json_object_get_double(item) : 0.0f;
+            }
+        } else {
+            log_error("Invalid max array in history JSON");
+            break;
+        }
+        
+        // Parse mean values
+        struct json_object *mean_json;
+        if (json_object_object_get_ex(data_json, "mean", &mean_json) && 
+            json_object_is_type(mean_json, json_type_array) && 
+            json_object_array_length(mean_json) == count) {
+            for (int i = 0; i < count; i++) {
+                struct json_object *item = json_object_array_get_idx(mean_json, i);
+                history->mean[i] = json_object_is_type(item, json_type_double) ? 
+                    json_object_get_double(item) : 0.0f;
+            }
+        } else {
+            log_error("Invalid mean array in history JSON");
+            break;
+        }
+        
+        success = true;
+    } while (0);
+    
+    json_object_put(parsed_json);
+    
+    if (!success) {
+        clear_entity_history(history);
+    }
+    
+    return success;
+}

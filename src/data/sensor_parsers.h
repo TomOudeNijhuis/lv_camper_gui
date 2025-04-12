@@ -34,6 +34,11 @@ bool parse_climate_sensor(const char *json_str, climate_sensor_t *climate);
  */
 bool parse_camper_states(const char *json_str, camper_sensor_t *camper_data);
 
+/**
+ * Parse entity history data
+ */
+bool parse_entity_history(const char *json_str, entity_history_t *history);
+
 #ifdef __cplusplus
 }
 #endif

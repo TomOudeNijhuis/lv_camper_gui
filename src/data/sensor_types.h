@@ -42,6 +42,20 @@ typedef struct {
     bool pump_state;
 } camper_sensor_t;
 
+/**
+ * Structure for entity history data
+ */
+typedef struct {
+    bool is_numeric;
+    char entity_name[32];
+    char unit[16];
+    int count;
+    char **timestamps;
+    float *min;
+    float *max;
+    float *mean;
+} entity_history_t;
+
 #ifdef __cplusplus
 }
 #endif

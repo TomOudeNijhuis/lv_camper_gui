@@ -23,6 +23,10 @@ static climate_sensor_t inside_climate = {0};
 static climate_sensor_t outside_climate = {0};
 static camper_sensor_t camper = {0};
 
+// Global variable to hold history data
+static entity_history_t entity_history = {0};
+static history_request_t current_history_request = {0};
+
 // Mutex for thread safety
 static pthread_mutex_t data_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -66,12 +70,12 @@ static bool is_action_queue_full(void);
 static bool enqueue_action(const camper_action_t *action);
 static bool dequeue_action(camper_action_t *action);
 
-
 static int fetch_data_internal(fetch_request_type_t request_type);
 static int fetch_camper_data_internal(void);
 static int fetch_inside_climate_data_internal(void);
 static int fetch_smart_solar_data_internal(void);
 static int fetch_smart_shunt_data_internal(void);
+static int fetch_entity_history_data_internal(void);
 
 /**
  * Initialize the background worker system
@@ -163,6 +167,38 @@ bool request_data_fetch(fetch_request_type_t request_type) {
     }
     
     return queued;
+}
+
+/**
+ * Request historical data for a specific entity
+ * @param sensor_name Name of the sensor (e.g., "inside", "SmartSolar")
+ * @param entity_name Name of the entity (e.g., "temperature")
+ * @param interval Time interval for data points (e.g., "hour", "day")
+ * @param samples Number of data points to retrieve
+ * @return true if request was queued successfully, false otherwise
+ */
+bool request_entity_history(const char *sensor_name, const char *entity_name, 
+                           const char *interval, int samples) {
+    if (!worker_running) {
+        log_error("Background worker not running, initialize it first");
+        return false;
+    }
+    
+    if (!sensor_name || !entity_name || !interval || samples <= 0) {
+        log_error("Invalid parameters for history request");
+        return false;
+    }
+    
+    // Store request parameters for later use
+    pthread_mutex_lock(&data_mutex);
+    snprintf(current_history_request.sensor_name, sizeof(current_history_request.sensor_name), "%s", sensor_name);
+    snprintf(current_history_request.entity_name, sizeof(current_history_request.entity_name), "%s", entity_name);
+    snprintf(current_history_request.interval, sizeof(current_history_request.interval), "%s", interval);
+    current_history_request.samples = samples;
+    pthread_mutex_unlock(&data_mutex);
+    
+    // Queue the request
+    return request_data_fetch(FETCH_ENTITY_HISTORY);
 }
 
 /**
@@ -331,10 +367,47 @@ static int fetch_data_internal(fetch_request_type_t request_type) {
             return fetch_smart_solar_data_internal();
         case FETCH_SMART_SHUNT:
             return fetch_smart_shunt_data_internal();
+        case FETCH_ENTITY_HISTORY:
+            return fetch_entity_history_data_internal();
         default:
             log_warning("Unimplemented fetch request type: %d", request_type);
             return -1;
     }
+}
+
+/**
+ * Internal function to fetch camper data from the server and update local state
+ */
+void clear_entity_history(entity_history_t *history) {
+    if (!history) return;
+    
+    if (history->timestamps) {
+        for (int i = 0; i < history->count; i++) {
+            if (history->timestamps[i]) {
+                free(history->timestamps[i]);
+                history->timestamps[i] = NULL;
+            }
+        }
+        free(history->timestamps);
+        history->timestamps = NULL;
+    }
+    
+    if (history->min) {
+        free(history->min);
+        history->min = NULL;
+    }
+    
+    if (history->max) {
+        free(history->max);
+        history->max = NULL;
+    }
+    
+    if (history->mean) {
+        free(history->mean);
+        history->mean = NULL;
+    }
+    
+    history->count = 0;
 }
 
 /**
@@ -485,6 +558,62 @@ static int fetch_smart_shunt_data_internal(void) {
 }
 
 /**
+ * Internal function to fetch entity history data from the server
+ */
+static int fetch_entity_history_data_internal(void) {
+    char api_url[MAX_URL_LENGTH];
+    history_request_t request;
+    
+    // Get a copy of the request parameters
+    pthread_mutex_lock(&data_mutex);
+    memcpy(&request, &current_history_request, sizeof(history_request_t));
+    pthread_mutex_unlock(&data_mutex);
+    
+    // Construct the API URL with the request parameters
+    snprintf(api_url, sizeof(api_url), "%s/sensors/%s/history/%s/?interval=%s&samples=%d", 
+             API_BASE_URL, request.sensor_name, request.entity_name, 
+             request.interval, request.samples);
+    
+    log_debug("Fetching entity history: %s", api_url);
+    http_response_t response = http_get(api_url, HTTP_TIMEOUT_SECONDS);
+    
+    if (!response.success) {
+        log_error("Failed to fetch entity history data: %s", response.error);
+        if (response.body && *response.body) {
+            log_error("Response body: %s", response.body);
+        }
+        http_response_free(&response);
+        return -1;
+    }
+    
+    // Parse the response
+    entity_history_t temp_history = {0};
+    if (parse_entity_history(response.body, &temp_history)) {
+        // Update the actual data structure in a thread-safe manner
+        pthread_mutex_lock(&data_mutex);
+        
+        // Clear old data
+        clear_entity_history(&entity_history);
+        
+        // Copy new data
+        memcpy(&entity_history, &temp_history, sizeof(entity_history_t));
+        
+        pthread_mutex_unlock(&data_mutex);
+        
+        log_debug("Entity history updated: %s.%s, %d data points", 
+                 request.sensor_name, request.entity_name, temp_history.count);
+    } else {
+        log_error("Failed to parse entity history data");
+        clear_entity_history(&temp_history);
+        http_response_free(&response);
+        return -1;
+    }
+    
+    http_response_free(&response);
+    return 0;
+}
+
+/**
  * Updates a single camper entity value based on its name
  * 
  * @param entity_name Name of the entity to update
@@ -565,4 +694,76 @@ camper_sensor_t* get_camper_data(void) {
     pthread_mutex_unlock(&data_mutex);
     
     return &safe_copy;
+}
+
+/**
+ * Get the entity history data
+ * @return Pointer to a copy of the entity_history_t data structure
+ * @note The caller is responsible for freeing the returned structure with free_entity_history_data()
+ */
+entity_history_t* get_entity_history_data(void) {
+    entity_history_t* history_copy = (entity_history_t*)malloc(sizeof(entity_history_t));
+    if (!history_copy) {
+        log_error("Failed to allocate memory for history data copy");
+        return NULL;
+    }
+    
+    pthread_mutex_lock(&data_mutex);
+    
+    // Copy basic fields
+    history_copy->is_numeric = entity_history.is_numeric;
+    strncpy(history_copy->entity_name, entity_history.entity_name, sizeof(history_copy->entity_name));
+    strncpy(history_copy->unit, entity_history.unit, sizeof(history_copy->unit));
+    history_copy->count = entity_history.count;
+    
+    // Allocate and copy arrays
+    history_copy->timestamps = NULL;
+    history_copy->min = NULL;
+    history_copy->max = NULL;
+    history_copy->mean = NULL;
+    
+    if (entity_history.count > 0) {
+        // Allocate and copy timestamps
+        history_copy->timestamps = (char**)malloc(entity_history.count * sizeof(char*));
+        if (history_copy->timestamps) {
+            memset(history_copy->timestamps, 0, entity_history.count * sizeof(char*));
+            for (int i = 0; i < entity_history.count; i++) {
+                if (entity_history.timestamps[i]) {
+                    history_copy->timestamps[i] = strdup(entity_history.timestamps[i]);
+                }
+            }
+        }
+        
+        // Allocate and copy data arrays
+        history_copy->min = (float*)malloc(entity_history.count * sizeof(float));
+        history_copy->max = (float*)malloc(entity_history.count * sizeof(float));
+        history_copy->mean = (float*)malloc(entity_history.count * sizeof(float));
+        
+        if (history_copy->min && entity_history.min) {
+            memcpy(history_copy->min, entity_history.min, entity_history.count * sizeof(float));
+        }
+        
+        if (history_copy->max && entity_history.max) {
+            memcpy(history_copy->max, entity_history.max, entity_history.count * sizeof(float));
+        }
+        
+        if (history_copy->mean && entity_history.mean) {
+            memcpy(history_copy->mean, entity_history.mean, entity_history.count * sizeof(float));
+        }
+    }
+    
+    pthread_mutex_unlock(&data_mutex);
+    
+    return history_copy;
+}
+
+/**
+ * Free memory allocated for an entity_history_t structure
+ * @param history Pointer to the entity_history_t structure to free
+ */
+void free_entity_history_data(entity_history_t *history) {
+    if (!history) return;
+    
+    clear_entity_history(history);
+    free(history);
 }
