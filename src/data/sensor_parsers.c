@@ -53,7 +53,8 @@ bool parse_smart_solar(const char *json_str, smart_solar_t *solar_data) {
             temp_solar.battery_voltage = atof(state_str);
         }
         else if (strcmp(entity_name, "charge_state") == 0) {
-            temp_solar.charge_state = atoi(state_str);
+            strncpy(temp_solar.charge_state, state_str, sizeof(temp_solar.charge_state) - 1);
+            temp_solar.charge_state[sizeof(temp_solar.charge_state) - 1] = '\0';
         }
         else if (strcmp(entity_name, "solar_power") == 0) {
             temp_solar.solar_power = atof(state_str);

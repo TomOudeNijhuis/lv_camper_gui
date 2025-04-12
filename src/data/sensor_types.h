@@ -13,7 +13,7 @@ extern "C" {
 typedef struct {
     double battery_voltage;
     double battery_charging_current;
-    int charge_state;
+    char charge_state[10];
     double solar_power;
     double yield_today;
 } smart_solar_t;

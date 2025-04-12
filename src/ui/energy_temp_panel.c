@@ -9,9 +9,9 @@
 static lv_obj_t *temperature_label = NULL;
 static lv_obj_t *humidity_label = NULL; 
 static lv_timer_t *update_timer = NULL;
-static lv_chart_series_t *temp_series = NULL; // Temperature data series
-static lv_chart_series_t *temp_min_series = NULL; // Min temperature data series
-static lv_obj_t *chart = NULL; // Chart object
+static lv_chart_series_t *temp_series = NULL;
+static lv_chart_series_t *temp_min_series = NULL;
+static lv_obj_t *chart = NULL;
 
 static lv_obj_t *power_label = NULL;
 static lv_obj_t *battery_status_label = NULL;
@@ -19,25 +19,16 @@ static lv_chart_series_t *hourly_energy_series = NULL;
 static lv_obj_t *energy_chart = NULL;
 
 static lv_obj_t *solar_power_label = NULL;
+static lv_obj_t *solar_state_label = NULL;
 static lv_chart_series_t *solar_hourly_energy_series = NULL;
 static lv_obj_t *solar_energy_chart = NULL;
 
-/**
- * Updates energy and temperature data displayed in the panel
- */
-void update_temp_data(climate_sensor_t *climate_data) {
-    if (temperature_label != NULL) {
-        lv_label_set_text_fmt(temperature_label, "%.1f °C", climate_data->temperature);
-    }
-    
-    if (humidity_label != NULL) {
-        lv_label_set_text_fmt(humidity_label, "%.1f%%", climate_data->humidity);
-    }
-    
+void update_climate_chart(void)
+{
     // Update chart with new temperature data only
     if (chart != NULL && temp_series != NULL && temp_min_series != NULL) {
         // Add new max temperature data point
-        lv_chart_set_next_value(chart, temp_series, (int)climate_data->temperature);
+        lv_chart_set_next_value(chart, temp_series, 12);
         
         // Add new min temperature data point
         //lv_chart_set_next_value(chart, temp_min_series, (int)temperature_min);
@@ -47,18 +38,8 @@ void update_temp_data(climate_sensor_t *climate_data) {
     }
 }
 
-void update_energy_data(smart_shunt_t *shunt_data) {
-    int battery_power = 350; // Placeholder for battery energy
-    int battery_status = 99;
-
-    // Update battery energy label
-    if (power_label != NULL) {
-        lv_label_set_text_fmt(power_label, "%d W", battery_power);
-    }
-    if (battery_status_label != NULL) {
-        lv_label_set_text_fmt(battery_status_label, "%d %%", battery_status);
-    }
-    
+void update_energy_chart(void)
+{
     // Update hourly energy chart - in a real app, we would only update once per hour
     if (energy_chart != NULL && hourly_energy_series != NULL) {
         // For demo purposes, just add a random value
@@ -67,15 +48,8 @@ void update_energy_data(smart_shunt_t *shunt_data) {
         lv_chart_refresh(energy_chart);
     }
 }
-
-void update_solar_data(smart_solar_t *solar_data) {
-    int solar_power = 210; // Placeholder for battery energy
-
-    // Update battery energy label
-    if (solar_power_label != NULL) {
-        lv_label_set_text_fmt(solar_power_label, "%d W", solar_power);
-    }
-    
+void update_solar_chart(void)
+{
     // Update hourly energy chart - in a real app, we would only update once per hour
     if (solar_hourly_energy_series != NULL && solar_energy_chart != NULL) {
         // For demo purposes, just add a random value
@@ -84,7 +58,6 @@ void update_solar_data(smart_solar_t *solar_data) {
         lv_chart_refresh(solar_energy_chart);
     }
 }
-
 /**
  * Timer callback to update energy and temperature data
  */
@@ -101,9 +74,36 @@ static void update_timer_cb(lv_timer_t *timer) {
     if (!result) {
         log_warning("Failed to request smart_shunt data fetch");
     }
-    update_temp_data(get_inside_climate_data());
-    update_energy_data(get_smart_shunt_data());
-    update_solar_data(get_smart_solar_data());
+
+    climate_sensor_t *climate_data = get_inside_climate_data();
+    if (temperature_label != NULL) {
+        lv_label_set_text_fmt(temperature_label, "%.1f °C", climate_data->temperature);
+    }
+    
+    if (humidity_label != NULL) {
+        lv_label_set_text_fmt(humidity_label, "%.1f%%", climate_data->humidity);
+    }
+
+    smart_shunt_t *shunt_data = get_smart_shunt_data();
+
+    // Update battery energy label
+    if (power_label != NULL) {
+        lv_label_set_text_fmt(power_label, "%.1f W", shunt_data->current * shunt_data->voltage);   
+    }
+    if (battery_status_label != NULL) {
+        lv_label_set_text_fmt(battery_status_label, "%.2f %%", shunt_data->soc);
+    }
+
+    smart_solar_t *solar_data = get_smart_solar_data();
+
+    // Update battery energy label
+    if (solar_power_label != NULL) {
+        lv_label_set_text_fmt(solar_power_label, "%.0f W", solar_data->solar_power);
+    }
+
+    if(solar_state_label != NULL) {
+        lv_label_set_text_fmt(solar_state_label, "%s", solar_data->charge_state);
+    }
 }
 
 void create_temperature_container(lv_obj_t *right_column) {
@@ -251,6 +251,14 @@ void create_energy_container(lv_obj_t *right_column) {
     lv_label_set_text(power_label, "--- W");
     lv_obj_set_style_text_font(power_label, &lv_font_montserrat_20, 0);
 
+    // Spacer
+    lv_obj_t *spacer = lv_obj_create(power_column);
+    lv_obj_set_height(spacer, 10);
+    lv_obj_set_style_bg_opa(spacer, LV_OPA_0, 0);
+    lv_obj_set_style_border_width(spacer, 0, 0);
+    lv_obj_set_scrollbar_mode(spacer, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(spacer, LV_OBJ_FLAG_SCROLLABLE);
+
     // Caption label
     lv_obj_t *status_caption = lv_label_create(power_column);
     lv_label_set_text(status_caption, "Status");
@@ -338,6 +346,23 @@ void create_solar_container(lv_obj_t *right_column) {
     solar_power_label = lv_label_create(power_column);
     lv_label_set_text(solar_power_label, "--- W");
     lv_obj_set_style_text_font(solar_power_label, &lv_font_montserrat_20, 0);
+
+    // Spacer
+    lv_obj_t *spacer = lv_obj_create(power_column);
+    lv_obj_set_height(spacer, 10);
+    lv_obj_set_style_bg_opa(spacer, LV_OPA_0, 0);
+    lv_obj_set_style_border_width(spacer, 0, 0);
+    lv_obj_set_scrollbar_mode(spacer, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(spacer, LV_OBJ_FLAG_SCROLLABLE);
+    
+    // Caption label
+    lv_obj_t *solar_state_caption = lv_label_create(power_column);
+    lv_label_set_text(solar_state_caption, "State");
+    
+    // Battery power value label
+    solar_state_label = lv_label_create(power_column);
+    lv_label_set_text(solar_state_label, "---");
+    lv_obj_set_style_text_font(solar_state_label, &lv_font_montserrat_20, 0);
 
     // Right column for hourly energy chart
     lv_obj_t *hourly_chart_container = lv_obj_create(solar_container);
@@ -427,6 +452,7 @@ void energy_temp_panel_cleanup(void) {
     hourly_energy_series = NULL;
     
     solar_power_label = NULL;
+    solar_state_label = NULL;
     solar_hourly_energy_series = NULL;
     solar_energy_chart = NULL;
 
