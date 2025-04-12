@@ -69,7 +69,9 @@ static bool dequeue_action(camper_action_t *action);
 
 static int fetch_data_internal(fetch_request_type_t request_type);
 static int fetch_camper_data_internal(void);
-static int fetch_system_data_internal(void);
+static int fetch_inside_climate_data_internal(void);
+static int fetch_smart_solar_data_internal(void);
+static int fetch_smart_shunt_data_internal(void);
 
 /**
  * Initialize the background worker system
@@ -323,6 +325,12 @@ static int fetch_data_internal(fetch_request_type_t request_type) {
     switch(request_type) {
         case FETCH_CAMPER_DATA:
             return fetch_camper_data_internal();
+        case FETCH_CLIMATE_INSIDE:
+            return fetch_inside_climate_data_internal();
+        case FETCH_SMART_SOLAR:
+            return fetch_smart_solar_data_internal();
+        case FETCH_SMART_SHUNT:
+            return fetch_smart_shunt_data_internal();
         default:
             log_warning("Unimplemented fetch request type: %d", request_type);
             return -1;
@@ -369,6 +377,113 @@ static int fetch_camper_data_internal(void) {
     return 0;
 }
 
+static int fetch_inside_climate_data_internal(void)
+{
+    char api_url[MAX_URL_LENGTH];
+    snprintf(api_url, sizeof(api_url), "%s/sensors/inside/states/", API_BASE_URL);
+    
+    http_response_t response = http_get(api_url, HTTP_TIMEOUT_SECONDS);
+    
+    if (!response.success) {
+        log_error("Failed to fetch climate data: %s", response.error);
+        if (response.body && *response.body) {
+            log_error("Response body: %s", response.body);
+        }
+        http_response_free(&response);
+        return -1;
+    }
+    
+    // Parse the response
+    climate_sensor_t temp_climate = {0};
+    if (parse_climate_sensor(response.body, &temp_climate)) {
+        // Update the actual data structure in a thread-safe manner
+        pthread_mutex_lock(&data_mutex);
+        memcpy(&inside_climate, &temp_climate, sizeof(climate_sensor_t));
+        pthread_mutex_unlock(&data_mutex);
+        
+        // Debug output
+        log_debug("Inside climate data updated: temperature=%.2f, humidity=%.2f, battery=%.2f", 
+                    inside_climate.temperature, inside_climate.humidity, inside_climate.battery);
+    }
+    
+    http_response_free(&response);
+    
+    return 0;
+}
+
+/**
+ * Internal function to fetch SmartSolar data from the server and update local state
+ */
+static int fetch_smart_solar_data_internal(void) {
+    char api_url[MAX_URL_LENGTH];
+    snprintf(api_url, sizeof(api_url), "%s/sensors/SmartSolar/states/", API_BASE_URL);
+    
+    http_response_t response = http_get(api_url, HTTP_TIMEOUT_SECONDS);
+    
+    if (!response.success) {
+        log_error("Failed to fetch SmartSolar data: %s", response.error);
+        if (response.body && *response.body) {
+            log_error("Response body: %s", response.body);
+        }
+        http_response_free(&response);
+        return -1;
+    }
+    
+    // Parse the response
+    smart_solar_t temp_solar = {0};
+    if (parse_smart_solar(response.body, &temp_solar)) {
+        // Update the actual data structure in a thread-safe manner
+        pthread_mutex_lock(&data_mutex);
+        memcpy(&smart_solar, &temp_solar, sizeof(smart_solar_t));
+        pthread_mutex_unlock(&data_mutex);
+        
+        // Debug output
+        log_debug("SmartSolar data updated: battery_v=%.2f, charging_current=%.2f, power=%.2f W, yield=%.2f kWh", 
+                 smart_solar.battery_voltage, smart_solar.battery_charging_current, 
+                 smart_solar.solar_power, smart_solar.yield_today);
+    }
+    
+    http_response_free(&response);
+    
+    return 0;
+}
+
+/**
+ * Internal function to fetch SmartShunt data from the server and update local state
+ */
+static int fetch_smart_shunt_data_internal(void) {
+    char api_url[MAX_URL_LENGTH];
+    snprintf(api_url, sizeof(api_url), "%s/sensors/SmartShunt/states/", API_BASE_URL);
+    
+    http_response_t response = http_get(api_url, HTTP_TIMEOUT_SECONDS);
+    
+    if (!response.success) {
+        log_error("Failed to fetch SmartShunt data: %s", response.error);
+        if (response.body && *response.body) {
+            log_error("Response body: %s", response.body);
+        }
+        http_response_free(&response);
+        return -1;
+    }
+    
+    // Parse the response
+    smart_shunt_t temp_shunt = {0};
+    if (parse_smart_shunt(response.body, &temp_shunt)) {
+        // Update the actual data structure in a thread-safe manner
+        pthread_mutex_lock(&data_mutex);
+        memcpy(&smart_shunt, &temp_shunt, sizeof(smart_shunt_t));
+        pthread_mutex_unlock(&data_mutex);
+        
+        // Debug output
+        log_debug("SmartShunt data updated: voltage=%.2f, current=%.2f, SoC=%.1f%%, remaining=%d mins", 
+                 temp_shunt.voltage, temp_shunt.current, temp_shunt.soc, temp_shunt.remaining_mins);
+    }
+    
+    http_response_free(&response);
+    
+    return 0;
+}
+
 /**
  * Updates a single camper entity value based on its name
  * 
@@ -399,84 +514,6 @@ bool update_camper_entity(const char *entity_name, const char *state_str)
     pthread_mutex_unlock(&data_mutex);
 
     return updated;
-}
-/**
- * Fetch system data from the server
- */
-static int fetch_system_data_internal(void) {
-    char api_url[MAX_URL_LENGTH];
-    snprintf(api_url, sizeof(api_url), "%s/sensors/5/states/", API_BASE_URL);
-
-    http_response_t response = http_get(api_url, HTTP_TIMEOUT_SECONDS);
-    
-    if (!response.success) {
-        log_error("Failed to fetch sensor data: %s", response.error);
-        if (response.body && *response.body) {
-            log_error("Response body: %s", response.body);
-        }
-        http_response_free(&response);
-        return -1;
-    }
-    
-    // Parse JSON response (array of sensors)
-    struct json_object *parsed_json = json_tokener_parse(response.body);
-    if (parsed_json == NULL) {
-        log_error("Failed to parse JSON response");
-        http_response_free(&response);
-        return -1;
-    }
-    
-    if (!json_object_is_type(parsed_json, json_type_array)) {
-        log_error("Expected JSON array, got something else");
-        json_object_put(parsed_json);
-        http_response_free(&response);
-        return -1;
-    }
-    
-    smart_solar_t temp_smart_solar = {0};
-    smart_shunt_t temp_smart_shunt = {0};
-    climate_sensor_t temp_inside_climate = {0};
-    climate_sensor_t temp_outside_climate = {0};
-    
-    // Iterate through sensors in the array
-    int array_len = json_object_array_length(parsed_json);
-    for (int i = 0; i < array_len; i++) {
-        struct json_object *sensor_obj = json_object_array_get_idx(parsed_json, i);
-        struct json_object *name_obj;
-        
-        if (!json_object_object_get_ex(sensor_obj, "name", &name_obj)) {
-            continue;  // Skip if no name
-        }
-        
-        const char *sensor_name = json_object_get_string(name_obj);
-        
-        // Process each sensor based on its name
-        if (strcmp(sensor_name, "SmartSolar") == 0) {
-            parse_smart_solar(sensor_obj, &temp_smart_solar);
-        } 
-        else if (strcmp(sensor_name, "SmartShunt") == 0) {
-            parse_smart_shunt(sensor_obj, &temp_smart_shunt);
-        }
-        else if (strcmp(sensor_name, "inside") == 0) {
-            parse_climate_sensor(sensor_obj, &temp_inside_climate);
-        }
-        else if (strcmp(sensor_name, "outside") == 0) {
-            parse_climate_sensor(sensor_obj, &temp_outside_climate);
-        }
-    }
-    
-    // Update all sensors atomically
-    pthread_mutex_lock(&data_mutex);
-    memcpy(&smart_solar, &temp_smart_solar, sizeof(smart_solar_t));
-    memcpy(&smart_shunt, &temp_smart_shunt, sizeof(smart_shunt_t));
-    memcpy(&inside_climate, &temp_inside_climate, sizeof(climate_sensor_t));
-    memcpy(&outside_climate, &temp_outside_climate, sizeof(climate_sensor_t));
-    pthread_mutex_unlock(&data_mutex);
-    
-    // Clean up
-    json_object_put(parsed_json);
-    http_response_free(&response);
-    return 0;
 }
 
 // Thread-safe getter functions to access the sensor data

@@ -21,37 +21,33 @@ static lv_obj_t *energy_chart = NULL;
 static lv_obj_t *solar_power_label = NULL;
 static lv_chart_series_t *solar_hourly_energy_series = NULL;
 static lv_obj_t *solar_energy_chart = NULL;
+
 /**
  * Updates energy and temperature data displayed in the panel
  */
-void update_temp_data(void) {
-    // Get latest data from data manager
-    float temperature = 23.5f; // Placeholder for temperature
-    float temperature_min = temperature - 1.5f; // Simulate min temperature
-    float humidity = 45.0f; // Placeholder for humidity (only for label)
-
+void update_temp_data(climate_sensor_t *climate_data) {
     if (temperature_label != NULL) {
-        lv_label_set_text_fmt(temperature_label, "%.1f °C", temperature);
+        lv_label_set_text_fmt(temperature_label, "%.1f °C", climate_data->temperature);
     }
     
     if (humidity_label != NULL) {
-        lv_label_set_text_fmt(humidity_label, "%.1f%%", humidity);
+        lv_label_set_text_fmt(humidity_label, "%.1f%%", climate_data->humidity);
     }
     
     // Update chart with new temperature data only
     if (chart != NULL && temp_series != NULL && temp_min_series != NULL) {
         // Add new max temperature data point
-        lv_chart_set_next_value(chart, temp_series, (int)temperature);
+        lv_chart_set_next_value(chart, temp_series, (int)climate_data->temperature);
         
         // Add new min temperature data point
-        lv_chart_set_next_value(chart, temp_min_series, (int)temperature_min);
+        //lv_chart_set_next_value(chart, temp_min_series, (int)temperature_min);
         
         // Refresh the chart to show new data
         lv_chart_refresh(chart);
     }
 }
 
-void update_energy_data(void) {
+void update_energy_data(smart_shunt_t *shunt_data) {
     int battery_power = 350; // Placeholder for battery energy
     int battery_status = 99;
 
@@ -72,7 +68,7 @@ void update_energy_data(void) {
     }
 }
 
-void update_solar_data(void) {
+void update_solar_data(smart_solar_t *solar_data) {
     int solar_power = 210; // Placeholder for battery energy
 
     // Update battery energy label
@@ -93,9 +89,21 @@ void update_solar_data(void) {
  * Timer callback to update energy and temperature data
  */
 static void update_timer_cb(lv_timer_t *timer) {
-    update_temp_data();
-    update_energy_data();
-    update_solar_data();
+    bool result = request_data_fetch(FETCH_CLIMATE_INSIDE);
+    if (!result) {
+        log_warning("Failed to request climate data fetch");
+    }
+    result = request_data_fetch(FETCH_SMART_SOLAR);
+    if (!result) {
+        log_warning("Failed to request smart_solardata fetch");
+    }
+    result = request_data_fetch(FETCH_SMART_SHUNT);
+    if (!result) {
+        log_warning("Failed to request smart_shunt data fetch");
+    }
+    update_temp_data(get_inside_climate_data());
+    update_energy_data(get_smart_shunt_data());
+    update_solar_data(get_smart_solar_data());
 }
 
 void create_temperature_container(lv_obj_t *right_column) {
@@ -203,9 +211,6 @@ void create_temperature_container(lv_obj_t *right_column) {
     }
     
     lv_chart_refresh(chart); // Required after direct set
-    
-    // Initial update
-    update_temp_data();
 }
 
 /**
@@ -297,8 +302,6 @@ void create_energy_container(lv_obj_t *right_column) {
     }
     
     lv_chart_refresh(energy_chart); // Force refresh after all points are set
-
-    update_energy_data();
 }
 
 void create_solar_container(lv_obj_t *right_column) {
@@ -378,8 +381,6 @@ void create_solar_container(lv_obj_t *right_column) {
     }
     
     lv_chart_refresh(solar_energy_chart); // Force refresh after all points are set
-
-    update_energy_data();
 }
 
 /**

@@ -37,6 +37,11 @@ static void log_level_button_event_cb(lv_event_t *e) {
 
 static void clear_button_event_cb(lv_event_t *e) {
     logger_clear();
+    
+    // Clear all child objects from the container
+    lv_obj_clean(logs_container);
+    
+    // Update the UI after clearing
     logger_update_ui(logs_container);
 }
 
