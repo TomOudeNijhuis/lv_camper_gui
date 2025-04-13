@@ -10,15 +10,16 @@
 #include "../data/sensor_types.h"
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-/**
- * @brief Creates the main application UI
- * @description Creates a tabview with Status, Analytics, and Logs tabs
- */
-void create_status_column(lv_obj_t *left_column);
-void status_column_cleanup(void);
+    /**
+     * @brief Creates the main application UI
+     * @description Creates a tabview with Status, Analytics, and Logs tabs
+     */
+    void create_status_column(lv_obj_t* left_column);
+    void status_column_cleanup(void);
 
 #ifdef __cplusplus
 }

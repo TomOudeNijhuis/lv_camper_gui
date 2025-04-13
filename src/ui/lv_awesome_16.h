@@ -7,14 +7,15 @@
 #define LV_AWESOME_16_H
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 #include "lvgl/lvgl.h"
 
 /* Declare the custom font */
 #if LVGL_VERSION_MAJOR >= 8
-extern const lv_font_t lv_awesome_16;
+    extern const lv_font_t lv_awesome_16;
 #else
 extern lv_font_t lv_awesome_16;
 #endif

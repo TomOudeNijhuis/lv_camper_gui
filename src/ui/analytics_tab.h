@@ -9,10 +9,11 @@
 #include "lvgl/lvgl.h"
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-void create_analytics_tab(lv_obj_t *parent);
+    void create_analytics_tab(lv_obj_t* parent);
 
 #ifdef __cplusplus
 }

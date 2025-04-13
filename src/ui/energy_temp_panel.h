@@ -7,7 +7,7 @@
  * Creates the energy and temperature panel
  * @param parent Parent container where the panel should be created
  */
-void create_energy_temp_panel(lv_obj_t *parent);
+void create_energy_temp_panel(lv_obj_t* parent);
 
 /**
  * Updates the energy and temperature data displayed in the panel

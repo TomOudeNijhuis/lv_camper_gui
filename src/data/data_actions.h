@@ -7,13 +7,14 @@
 #define DATA_ACTIONS_H
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-/**
- * Internal function to set camper action
- */
-int set_camper_action_internal(const char *entity_name, const char *status);
+    /**
+     * Internal function to set camper action
+     */
+    int set_camper_action_internal(const char* entity_name, const char* status);
 
 #ifdef __cplusplus
 }

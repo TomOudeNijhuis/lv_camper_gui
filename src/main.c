@@ -17,7 +17,7 @@
 #include "lvgl/lvgl.h"
 #include "lvgl/demos/lv_demos.h"
 #include "lib/lv_sdl_disp.h"
-#include "ui/ui.h" 
+#include "ui/ui.h"
 #include "lib/logger.h"
 #include "lib/http_client.h"
 #include "data/data_manager.h"
@@ -25,18 +25,16 @@
 #include "main.h"
 
 /* Simulator settings */
-typedef struct {
+typedef struct
+{
     int window_width;
     int window_height;
 } simulator_settings_t;
 
-simulator_settings_t settings = {
-    .window_width = 1024,
-    .window_height = 600
-};
+simulator_settings_t settings = {.window_width = 1024, .window_height = 600};
 
 /* Internal functions */
-static void configure(int argc, char **argv);
+static void configure(int argc, char** argv);
 static void print_lvgl_version(void);
 static void print_usage(void);
 static void tick_thread_init(void);
@@ -46,10 +44,7 @@ static void tick_thread_init(void);
  */
 static void print_lvgl_version(void)
 {
-    fprintf(stdout, "%d.%d.%d-%s\n",
-            LVGL_VERSION_MAJOR,
-            LVGL_VERSION_MINOR,
-            LVGL_VERSION_PATCH,
+    fprintf(stdout, "%d.%d.%d-%s\n", LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH,
             LVGL_VERSION_INFO);
 }
 
@@ -67,7 +62,7 @@ static void print_usage(void)
 /**
  * @brief Helper function to exit with error message
  */
-static void die(const char *fmt, ...)
+static void die(const char* fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -79,30 +74,30 @@ static void die(const char *fmt, ...)
 /**
  * @brief Parse command line arguments and configure the application
  */
-static void configure(int argc, char **argv)
+static void configure(int argc, char** argv)
 {
     int opt = 0;
 
     /* Default values already set in global settings */
 
     /* Parse the command-line options. */
-    while ((opt = getopt(argc, argv, "W:H:Vh")) != -1) {
-        switch (opt) {
-        case 'h':
-            print_usage();
-            exit(EXIT_SUCCESS);
-            break;
-        case 'V':
-            print_lvgl_version();
-            exit(EXIT_SUCCESS);
-            break;
-        case ':':
-            print_usage();
-            die("Option -%c requires an argument.\n", opt);
-            break;
-        case '?':
-            print_usage();
-            die("Unknown option -%c.\n", opt);
+    while((opt = getopt(argc, argv, "W:H:Vh")) != -1)
+    {
+        switch(opt)
+        {
+            case 'h':
+                print_usage();
+                exit(EXIT_SUCCESS);
+                break;
+            case 'V':
+                print_lvgl_version();
+                exit(EXIT_SUCCESS);
+                break;
+            case ':':
+                print_usage();
+                die("Option -%c requires an argument.\n", opt);
+                break;
+            case '?': print_usage(); die("Unknown option -%c.\n", opt);
         }
     }
 }
@@ -110,13 +105,14 @@ static void configure(int argc, char **argv)
 /**
  * @brief LVGL tick thread function
  */
-static void *tick_thread_cb(void *data)
+static void* tick_thread_cb(void* data)
 {
     (void)data;
 
-    while (1) {
-        usleep(5000);    /* Sleep for 5 milliseconds */
-        lv_tick_inc(5);  /* Tell LVGL that 5 milliseconds has elapsed */
+    while(1)
+    {
+        usleep(5000);   /* Sleep for 5 milliseconds */
+        lv_tick_inc(5); /* Tell LVGL that 5 milliseconds has elapsed */
     }
 
     return NULL;
@@ -128,8 +124,9 @@ static void *tick_thread_cb(void *data)
 static void tick_thread_init(void)
 {
     pthread_t thread;
-    int ret = pthread_create(&thread, NULL, tick_thread_cb, NULL);
-    if (ret != 0) {
+    int       ret = pthread_create(&thread, NULL, tick_thread_cb, NULL);
+    if(ret != 0)
+    {
         die("Failed to create tick thread: %s\n", strerror(ret));
     }
     pthread_detach(thread);
@@ -142,36 +139,36 @@ static void lvgl_init(void)
 {
     /* Initialize LVGL library */
     lv_init();
-    
+
     /* Initialize tick thread for LVGL timing */
     tick_thread_init();
 
     log_debug("LVGL initialized");
 }
 
-
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     /* Parse command line arguments */
     configure(argc, argv);
-    
-    #ifdef LV_CAMPER_DEBUG
+
+#ifdef LV_CAMPER_DEBUG
 
     // Initialize memory debugging
     mem_debug_init();
-    
-    static uint32_t frame_count = 0;
-    static uint32_t refresh_count = 0;
-    static uint32_t last_time = 0;
 
-    #endif
+    static uint32_t frame_count   = 0;
+    static uint32_t refresh_count = 0;
+    static uint32_t last_time     = 0;
+
+#endif
     /* Initialize logger */
     logger_init();
     log_info("Application starting v%s", APP_VERSION_STRING);
 
     http_client_init();
 
-    if (init_background_fetcher() != 0) {
+    if(init_background_fetcher() != 0)
+    {
         log_error("Failed to initialize background data fetcher");
     }
 
@@ -180,77 +177,85 @@ int main(int argc, char **argv)
 
     /* Initialize the SDL display with the configured size */
     lv_port_disp_init(settings.window_width, settings.window_height);
-    
+
     /* Create an SDL mouse input device */
-    lv_indev_t *mouse_indev = lv_sdl_mouse_create();
-    if (!mouse_indev) {
+    lv_indev_t* mouse_indev = lv_sdl_mouse_create();
+    if(!mouse_indev)
+    {
         log_error("Failed to create mouse input device.");
     }
-    
+
     lv_indev_t* touch_indev = lv_sdl_touch_create();
-    if (!touch_indev) {
+    if(!touch_indev)
+    {
         log_error("Warning: Failed to create touch input device.");
     }
 
     /* Create a Demo */
     create_ui();
 
-    #ifdef LV_CAMPER_DEBUG
+#ifdef LV_CAMPER_DEBUG
 
     ui_print_memory_usage();
     mem_debug_print_stats();
 
-    #endif
+#endif
 
     /* Main loop */
-    while (1) {
+    while(1)
+    {
         /* Handle SDL events */
         lv_sdl_handle_events();
-        
+
         /* Let LVGL do its work */
         lv_task_handler();
 
-        #ifdef LV_CAMPER_DEBUG
+#ifdef LV_CAMPER_DEBUG
 
         refresh_count++;
         frame_count++;
         uint32_t current_time = SDL_GetTicks();
-        
 
-        if (refresh_count % 1000 == 0) {
+        if(refresh_count % 1000 == 0)
+        {
             log_debug("Running LVGL garbage collection");
 
             lv_result_t lv_result = lv_mem_test();
-            if (lv_result != LV_RESULT_OK) {
+            if(lv_result != LV_RESULT_OK)
+            {
                 log_error("LVGL memory test failed: %d", lv_result);
             }
         }
 
-        if (current_time - last_time > 5000) {
+        if(current_time - last_time > 5000)
+        {
             float fps = frame_count / ((current_time - last_time) / 1000.0f);
             log_info("UI performance: %.2f fps", fps);
             frame_count = 0;
-            last_time = current_time;
+            last_time   = current_time;
         }
 
-        #endif
+#endif
 
         /* Sleep more when display is off to reduce CPU usage */
-        if (ui_is_sleeping()) {
+        if(ui_is_sleeping())
+        {
             SDL_Delay(200);
-        } else {
+        }
+        else
+        {
             SDL_Delay(20);
         }
     }
-    
+
     /* Clean up resources (never reached in normal execution) */
     lv_port_disp_deinit();
 
-    #ifdef LV_CAMPER_DEBUG
-    
+#ifdef LV_CAMPER_DEBUG
+
     mem_debug_deinit();
 
-    #endif
+#endif
 
     return 0;
 }
