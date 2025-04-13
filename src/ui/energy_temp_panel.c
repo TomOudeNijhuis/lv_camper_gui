@@ -253,6 +253,57 @@ bool update_energy_chart_with_history(entity_history_t* history_data)
         // Update the chart's Y-axis range (0 to max, since we're showing consumed Ah)
         lv_chart_set_range(energy_chart, LV_CHART_AXIS_PRIMARY_Y, 0, range_max);
 
+        // Add dashed line for max value
+        static lv_obj_t*          max_line = NULL;
+        static lv_point_precise_t max_line_points[2];
+
+        // Remove previous line if it exists
+        if(max_line != NULL)
+        {
+            lv_obj_del(max_line);
+            max_line = NULL;
+        }
+
+        // Get chart content dimensions and coordinates
+        lv_coord_t chart_w = lv_obj_get_content_width(energy_chart);
+        lv_coord_t chart_h = lv_obj_get_content_height(energy_chart);
+        lv_area_t  chart_coords;
+        lv_obj_get_content_coords(energy_chart, &chart_coords);
+
+        // Calculate points for the actual data area
+        float point_width = (float)chart_w / (point_count > 1 ? point_count - 1 : 1);
+        float x_start     = 1;
+        float x_end       = chart_w - 1;
+
+        // Create new max line (position it exactly at max value)
+        max_line        = lv_line_create(energy_chart);
+        float max_y_pos = chart_h - ((max_ah_change / range_max) * chart_h);
+
+        max_line_points[0].x = x_start;
+        max_line_points[0].y = max_y_pos;
+        max_line_points[1].x = x_end;
+        max_line_points[1].y = max_y_pos;
+
+        lv_line_set_points(max_line, max_line_points, 2);
+        lv_obj_set_style_line_width(max_line, 1, 0);
+        lv_obj_set_style_line_color(max_line, lv_palette_main(LV_PALETTE_RED), 0);
+        lv_obj_set_style_line_dash_width(max_line, 3, 0);
+        lv_obj_set_style_line_dash_gap(max_line, 3, 0);
+
+        // Add max value label
+        static lv_obj_t* max_value_label = NULL;
+
+        if(max_value_label == NULL)
+        {
+            max_value_label = lv_label_create(energy_chart);
+            lv_obj_set_style_text_font(max_value_label, &lv_font_montserrat_12, 0);
+            lv_obj_set_style_text_color(max_value_label, lv_palette_main(LV_PALETTE_RED), 0);
+        }
+
+        // Update the label text with actual max value
+        lv_label_set_text_fmt(max_value_label, "%.1f Ah", max_ah_change);
+        lv_obj_align(max_value_label, LV_ALIGN_TOP_LEFT, 5, -8);
+
         // Fill chart with calculated Ah data
         for(int i = 0; i < point_count && i < data_count - 1; i++)
         {
@@ -319,6 +370,8 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
         // Find the overall min and max yield values
         float hourly_yield[point_count];
         float prev_sample = history_data->max[0];
+        float max_yield   = 0;
+
         for(int i = 0; i < point_count && i < data_count; i++)
         {
             if(prev_sample > history_data->max[i + 1])
@@ -330,11 +383,70 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
                 hourly_yield[i] = history_data->max[i + 1] - prev_sample;
             }
 
+            if(hourly_yield[i] > max_yield)
+                max_yield = hourly_yield[i];
+
             prev_sample = history_data->max[i + 1];
         }
 
+        // Set chart range with 10% padding
+        int range_max = ceil(max_yield * 1.1);
+        if(range_max < 100)
+            range_max = 100; // Minimum range of 100Wh
+
         // Update the chart's Y-axis range
-        lv_chart_set_range(solar_energy_chart, LV_CHART_AXIS_PRIMARY_Y, 0, 110);
+        lv_chart_set_range(solar_energy_chart, LV_CHART_AXIS_PRIMARY_Y, 0, range_max);
+
+        // Add dashed line for max value
+        static lv_obj_t*          max_line = NULL;
+        static lv_point_precise_t max_line_points[2];
+
+        // Remove previous line if it exists
+        if(max_line != NULL)
+        {
+            lv_obj_del(max_line);
+            max_line = NULL;
+        }
+
+        // Get chart content dimensions and coordinates
+        lv_coord_t chart_w = lv_obj_get_content_width(solar_energy_chart);
+        lv_coord_t chart_h = lv_obj_get_content_height(solar_energy_chart);
+        lv_area_t  chart_coords;
+        lv_obj_get_content_coords(solar_energy_chart, &chart_coords);
+
+        // Calculate points for the actual data area
+        float point_width = (float)chart_w / (point_count > 1 ? point_count - 1 : 1);
+        float x_start     = 1;
+        float x_end       = chart_w - 1;
+
+        // Create new max line (position it exactly at max value)
+        max_line        = lv_line_create(solar_energy_chart);
+        float max_y_pos = chart_h - ((max_yield / range_max) * chart_h);
+
+        max_line_points[0].x = x_start;
+        max_line_points[0].y = max_y_pos;
+        max_line_points[1].x = x_end;
+        max_line_points[1].y = max_y_pos;
+
+        lv_line_set_points(max_line, max_line_points, 2);
+        lv_obj_set_style_line_width(max_line, 1, 0);
+        lv_obj_set_style_line_color(max_line, lv_palette_main(LV_PALETTE_GREEN), 0);
+        lv_obj_set_style_line_dash_width(max_line, 3, 0);
+        lv_obj_set_style_line_dash_gap(max_line, 3, 0);
+
+        // Add max value label
+        static lv_obj_t* max_value_label = NULL;
+
+        if(max_value_label == NULL)
+        {
+            max_value_label = lv_label_create(solar_energy_chart);
+            lv_obj_set_style_text_font(max_value_label, &lv_font_montserrat_12, 0);
+            lv_obj_set_style_text_color(max_value_label, lv_palette_main(LV_PALETTE_GREEN), 0);
+        }
+
+        // Update the label text with actual max value
+        lv_label_set_text_fmt(max_value_label, "%.1f Wh", max_yield);
+        lv_obj_align(max_value_label, LV_ALIGN_TOP_LEFT, 5, -8);
 
         // Fill chart with real data
         for(int i = 0; i < point_count && i < data_count; i++)
