@@ -524,7 +524,11 @@ static void update_long_timer_cb(lv_timer_t* timer)
     bool       result      = false;
 
     if(ui_is_sleeping())
+    {
+        fetch_state = 0;
+        lv_timer_set_period(timer, DATA_UPDATE_INTERVAL_MS);
         return;
+    }
 
     if(fetch_state == 0)
     {
