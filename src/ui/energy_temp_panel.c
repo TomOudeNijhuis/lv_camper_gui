@@ -5,6 +5,7 @@
 #include "../lib/logger.h"
 #include "../data/data_manager.h"
 #include "ui.h"
+#include "../main.h"
 
 // Static variables for UI elements
 static lv_obj_t*   temperature_label = NULL;
@@ -62,8 +63,9 @@ void update_climate_chart_with_history(entity_history_t* history_data)
         float y_min = floor(min_temp_overall - range_padding);
         float y_max = ceil(max_temp_overall + range_padding);
 
-        // Update the chart's Y-axis range
-        lv_chart_set_range(chart, LV_CHART_AXIS_PRIMARY_Y, (int16_t)y_min, (int16_t)y_max);
+        // Update the chart's Y-axis range with fixed-point values (multiplied by 10)
+        lv_chart_set_range(chart, LV_CHART_AXIS_PRIMARY_Y, (int16_t)(y_min * 10),
+                           (int16_t)(y_max * 10));
 
         // Add dashed lines for min and max values
         static lv_obj_t*          min_line = NULL;
@@ -133,11 +135,13 @@ void update_climate_chart_with_history(entity_history_t* history_data)
             int idx = data_count - i - 1;
             if(idx >= 0)
             {
-                int temp_value = (int)history_data->max[idx];
+                int temp_value =
+                    (int)(history_data->max[idx] * 10); // Convert to fixed point with 1 decimal
                 lv_chart_set_next_value(chart, temp_series, temp_value);
 
                 // Use the min data for our second series
-                int min_temp = (int)history_data->min[idx];
+                int min_temp =
+                    (int)(history_data->min[idx] * 10); // Convert to fixed point with 1 decimal
                 lv_chart_set_next_value(chart, temp_min_series, min_temp);
             }
         }
@@ -251,7 +255,7 @@ bool update_energy_chart_with_history(entity_history_t* history_data)
             range_max = 10; // Minimum range of 10Ah
 
         // Update the chart's Y-axis range (0 to max, since we're showing consumed Ah)
-        lv_chart_set_range(energy_chart, LV_CHART_AXIS_PRIMARY_Y, 0, range_max);
+        lv_chart_set_range(energy_chart, LV_CHART_AXIS_PRIMARY_Y, 0, range_max * 10);
 
         // Add dashed line for max value
         static lv_obj_t*          max_line = NULL;
@@ -314,7 +318,10 @@ bool update_energy_chart_with_history(entity_history_t* history_data)
             {
                 // For zero or negative values (charging periods), display a minimal positive value
                 // so it's visible in the chart
-                int ah_value = (hourly_ah[idx] <= 0.1f) ? 1 : (int)hourly_ah[idx];
+                int ah_value =
+                    (hourly_ah[idx] <= 0.1f)
+                        ? 10
+                        : (int)(hourly_ah[idx] * 10); // Convert to fixed point with 1 decimal
                 lv_chart_set_next_value(energy_chart, hourly_energy_series, ah_value);
             }
         }
@@ -395,7 +402,7 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
             range_max = 100; // Minimum range of 100Wh
 
         // Update the chart's Y-axis range
-        lv_chart_set_range(solar_energy_chart, LV_CHART_AXIS_PRIMARY_Y, 0, range_max);
+        lv_chart_set_range(solar_energy_chart, LV_CHART_AXIS_PRIMARY_Y, 0, range_max * 10);
 
         // Add dashed line for max value
         static lv_obj_t*          max_line = NULL;
@@ -465,7 +472,8 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
                 }
                 else
                 {
-                    int yield_value = (int)hourly_yield[idx];
+                    int yield_value =
+                        (int)(hourly_yield[idx] * 10); // Convert to fixed point with 1 decimal
                     lv_chart_set_next_value(solar_energy_chart, solar_hourly_energy_series,
                                             yield_value);
                 }
@@ -552,7 +560,10 @@ static void update_long_timer_cb(lv_timer_t* timer)
     {
         result = update_energy_chart();
         if(result)
+        {
             fetch_state = 0;
+            lv_timer_set_period(timer, 60000);
+        }
     }
 }
 
@@ -597,7 +608,7 @@ static void update_timer_cb(lv_timer_t* timer)
     }
     if(battery_status_label != NULL)
     {
-        lv_label_set_text_fmt(battery_status_label, "%.2f %%", shunt_data->soc);
+        lv_label_set_text_fmt(battery_status_label, "%.1f%%", shunt_data->soc);
     }
 
     smart_solar_t* solar_data = get_smart_solar_data();
@@ -681,7 +692,7 @@ void create_temperature_container(lv_obj_t* right_column)
     lv_obj_set_scrollbar_mode(chart_container, LV_SCROLLBAR_MODE_OFF);
     lv_obj_clear_flag(chart_container, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Add title to the chart
+    // Add title to the chart - indicate fixed-point values
     lv_obj_t* chart_title = lv_label_create(chart_container);
     lv_label_set_text(chart_title, "Hourly Temperature (°C)");
     lv_obj_set_style_pad_all(chart_title, -5, 0);
@@ -701,8 +712,8 @@ void create_temperature_container(lv_obj_t* right_column)
     // Fix: Set proper size for chart indicators (points on the line)
     lv_obj_set_style_size(chart, 4, 4, LV_PART_INDICATOR); // Width and height for points
 
-    // Range setup
-    lv_chart_set_range(chart, LV_CHART_AXIS_PRIMARY_Y, 0, 40); // Temperature: 0-40°C
+    // Range setup - with fixed point (multiplied by 10)
+    lv_chart_set_range(chart, LV_CHART_AXIS_PRIMARY_Y, 0, 400); // Temperature: 0-40°C (x10)
 
     // Set proper number of division lines for temperature scale
     lv_chart_set_div_line_count(chart, 4, 7); // 4 horizontal lines = 5 sections (0,10,20,30,40)
@@ -726,7 +737,7 @@ void create_energy_container(lv_obj_t* right_column)
 {
     // Main container for battery energy and hourly chart
     lv_obj_t* energy_container = lv_obj_create(right_column);
-    lv_obj_set_size(energy_container, LV_PCT(100), 160); // Same height as temperature container
+    lv_obj_set_size(energy_container, LV_PCT(100), 160);
     lv_obj_set_style_border_width(energy_container, 0, 0);
     lv_obj_set_style_radius(energy_container, 0, 0);
     lv_obj_set_style_pad_all(energy_container, 5, 0);
@@ -795,14 +806,14 @@ void create_energy_container(lv_obj_t* right_column)
     lv_obj_set_style_pad_column(energy_chart, 2, 0);
     lv_chart_set_point_count(energy_chart, 48);
 
-    // Add title to the chart
+    // Add title to the chart - indicate fixed-point values
     lv_obj_t* chart_title = lv_label_create(hourly_chart_container);
     lv_label_set_text(chart_title, "Hourly Battery Consumption (Ah)");
     lv_obj_set_style_pad_all(chart_title, -5, 0);
     lv_obj_align(chart_title, LV_ALIGN_TOP_MID, 0, 0);
 
-    // Set range for the chart to show consumption (always positive)
-    lv_chart_set_range(energy_chart, LV_CHART_AXIS_PRIMARY_Y, 0, 20);
+    // Set range for the chart to show consumption (always positive) - use fixed point
+    lv_chart_set_range(energy_chart, LV_CHART_AXIS_PRIMARY_Y, 0, 200); // 0-20 Ah (x10)
 
     // Add data series for hourly energy
     hourly_energy_series =
@@ -890,14 +901,14 @@ void create_solar_container(lv_obj_t* right_column)
     lv_obj_set_style_pad_column(solar_energy_chart, 2, 0);
     lv_chart_set_point_count(solar_energy_chart, 48);
 
-    // Add title to the chart
+    // Add title to the chart - indicate fixed-point values
     lv_obj_t* chart_title = lv_label_create(hourly_chart_container);
     lv_label_set_text(chart_title, "Hourly Solar Energy (Wh)");
     lv_obj_set_style_pad_all(chart_title, -5, 0);
     lv_obj_align(chart_title, LV_ALIGN_TOP_MID, 0, 0);
 
-    // Set range for the chart to ensure all data points are visible
-    lv_chart_set_range(solar_energy_chart, LV_CHART_AXIS_PRIMARY_Y, 0, 300);
+    // Set range for the chart to ensure all data points are visible - use fixed point
+    lv_chart_set_range(solar_energy_chart, LV_CHART_AXIS_PRIMARY_Y, 0, 3000); // 0-300 Wh (x10)
 
     // Add data series for hourly energy
     solar_hourly_energy_series = lv_chart_add_series(
@@ -924,8 +935,8 @@ void create_energy_temp_panel(lv_obj_t* right_column)
     create_solar_container(right_column);
 
     // Create a timer to update the values periodically
-    update_timer      = lv_timer_create(update_timer_cb, 5000, NULL);
-    update_long_timer = lv_timer_create(update_long_timer_cb, 3000, NULL);
+    update_timer      = lv_timer_create(update_timer_cb, DATA_UPDATE_INTERVAL_MS, NULL);
+    update_long_timer = lv_timer_create(update_long_timer_cb, DATA_UPDATE_INTERVAL_MS, NULL);
     log_info("Energy and temperature panel created");
 }
 
