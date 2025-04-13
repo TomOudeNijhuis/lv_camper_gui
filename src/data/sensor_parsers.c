@@ -10,6 +10,22 @@
 #include "data_manager.h"
 
 /**
+ * Helper function to get numeric value from JSON object, handling both integer and double types
+ */
+static float get_json_number(struct json_object* obj)
+{
+    if(json_object_is_type(obj, json_type_double))
+    {
+        return (float)json_object_get_double(obj);
+    }
+    else if(json_object_is_type(obj, json_type_int))
+    {
+        return (float)json_object_get_int64(obj);
+    }
+    return 0.0f; // Default value for non-numeric types
+}
+
+/**
  * Parse SmartSolar sensor data
  */
 bool parse_smart_solar(const char* json_str, smart_solar_t* solar_data)
@@ -443,9 +459,7 @@ bool parse_entity_history(const char* json_str, entity_history_t* history)
             for(int i = 0; i < count; i++)
             {
                 struct json_object* item = json_object_array_get_idx(min_json, i);
-                history->min[i]          = json_object_is_type(item, json_type_double)
-                                               ? json_object_get_double(item)
-                                               : 0.0f;
+                history->min[i]          = get_json_number(item);
             }
         }
         else
@@ -463,9 +477,7 @@ bool parse_entity_history(const char* json_str, entity_history_t* history)
             for(int i = 0; i < count; i++)
             {
                 struct json_object* item = json_object_array_get_idx(max_json, i);
-                history->max[i]          = json_object_is_type(item, json_type_double)
-                                               ? json_object_get_double(item)
-                                               : 0.0f;
+                history->max[i]          = get_json_number(item);
             }
         }
         else
@@ -483,9 +495,7 @@ bool parse_entity_history(const char* json_str, entity_history_t* history)
             for(int i = 0; i < count; i++)
             {
                 struct json_object* item = json_object_array_get_idx(mean_json, i);
-                history->mean[i]         = json_object_is_type(item, json_type_double)
-                                               ? json_object_get_double(item)
-                                               : 0.0f;
+                history->mean[i]         = get_json_number(item);
             }
         }
         else
