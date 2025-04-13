@@ -570,7 +570,7 @@ static int fetch_entity_history_data_internal(void) {
     pthread_mutex_unlock(&data_mutex);
     
     // Construct the API URL with the request parameters
-    snprintf(api_url, sizeof(api_url), "%s/sensors/%s/history/%s/?interval=%s&samples=%d", 
+    snprintf(api_url, sizeof(api_url), "%s/grouped_states_by_name/%s/%s?period=%s&samples=%d", 
              API_BASE_URL, request.sensor_name, request.entity_name, 
              request.interval, request.samples);
     
