@@ -4,6 +4,7 @@
 #include "energy_temp_panel.h"
 #include "../lib/logger.h"
 #include "../data/data_manager.h"
+#include "ui.h"
 
 // Static variables for UI elements
 static lv_obj_t*   temperature_label = NULL;
@@ -164,14 +165,15 @@ void update_climate_chart_with_history(entity_history_t* history_data)
         lv_label_set_text_fmt(min_temp_label, "%.1f°C", min_temp_overall);
 
         // Position the labels
-        lv_obj_align(max_temp_label, LV_ALIGN_TOP_LEFT, 5, 8);
-        lv_obj_align(min_temp_label, LV_ALIGN_BOTTOM_LEFT, 5, -8);
+        lv_obj_align(max_temp_label, LV_ALIGN_TOP_LEFT, 5, -8);
+        lv_obj_align(min_temp_label, LV_ALIGN_BOTTOM_LEFT, 5, 8);
 
         // Refresh the chart to show new data
         lv_chart_refresh(chart);
 
-        log_info("Climate chart updated with %d historical temperature points (range: %.1f-%.1f°C)",
-                 data_count, min_temp_overall, max_temp_overall);
+        log_debug(
+            "Climate chart updated with %d historical temperature points (range: %.1f-%.1f°C)",
+            data_count, min_temp_overall, max_temp_overall);
     }
 }
 
@@ -184,7 +186,7 @@ bool fetch_climate(void)
     }
     else
     {
-        log_info("Requested temperature history data");
+        log_debug("Requested temperature history data");
     }
 
     return result;
@@ -206,16 +208,101 @@ bool update_climate_chart(void)
     return false;
 }
 
-void update_energy_chart(void)
+bool update_energy_chart_with_history(entity_history_t* history_data)
 {
-    // Update hourly energy chart - in a real app, we would only update once per hour
-    if(energy_chart != NULL && hourly_energy_series != NULL)
+    if(energy_chart != NULL && hourly_energy_series != NULL && history_data != NULL)
     {
-        // For demo purposes, just add a random value
-        int hourly_energy = lv_rand(50, 250); // Random Wh value
-        lv_chart_set_next_value(energy_chart, hourly_energy_series, hourly_energy);
+        // Clear existing data
+        lv_chart_set_all_value(energy_chart, hourly_energy_series, 0);
+
+        // Get the point count in the chart
+        uint16_t point_count = lv_chart_get_point_count(energy_chart);
+        uint16_t data_count  = history_data->count;
+
+        // Calculate hourly Ah changes by comparing adjacent data points
+        float hourly_ah[point_count];
+        float prev_sample = history_data->max[0];
+        for(int i = 0; i < point_count && i < data_count - 1; i++)
+        {
+            if(prev_sample > history_data->max[i + 1])
+            {
+                // Reset Ah value
+                hourly_ah[i] = history_data->max[i + 1];
+            }
+            else
+            {
+                // Calculate the difference in Ah
+                hourly_ah[i] = history_data->max[i + 1] - prev_sample;
+            }
+            prev_sample = history_data->max[i + 1];
+        }
+
+        // Find max Ah change to set chart range
+        float max_ah_change = 0;
+        for(int i = 0; i < point_count && i < data_count - 1; i++)
+        {
+            if(hourly_ah[i] > max_ah_change)
+                max_ah_change = hourly_ah[i];
+        }
+
+        // Set chart range with 10% padding
+        int range_max = ceil(max_ah_change * 1.1);
+        if(range_max < 10)
+            range_max = 10; // Minimum range of 10Ah
+
+        // Update the chart's Y-axis range (0 to max, since we're showing consumed Ah)
+        lv_chart_set_range(energy_chart, LV_CHART_AXIS_PRIMARY_Y, 0, range_max);
+
+        // Fill chart with calculated Ah data
+        for(int i = 0; i < point_count && i < data_count - 1; i++)
+        {
+            // Convert data from history to chart format
+            // History data typically comes newest first, so we reverse it
+            int idx = data_count - i - 2;
+            if(idx >= 0)
+            {
+                // For zero or negative values (charging periods), display a minimal positive value
+                // so it's visible in the chart
+                int ah_value = (hourly_ah[idx] <= 0.1f) ? 1 : (int)hourly_ah[idx];
+                lv_chart_set_next_value(energy_chart, hourly_energy_series, ah_value);
+            }
+        }
+
+        // Refresh the chart to show new data
         lv_chart_refresh(energy_chart);
+
+        log_debug("Energy chart updated with %d historical Ah consumption points", data_count - 1);
+        return true;
     }
+    return false;
+}
+
+bool fetch_battery_consumption(void)
+{
+    bool result = request_entity_history("SmartShunt", "consumed_ah", "1h", 49);
+    if(!result)
+    {
+        log_warning("Failed to request battery consumption history data");
+    }
+    else
+    {
+        log_debug("Requested battery consumption history data");
+    }
+    return result;
+}
+
+bool update_energy_chart(void)
+{
+    // Check if historical data is available
+    entity_history_t* history_data = get_entity_history_data();
+    if(history_data != NULL && history_data->count > 0)
+    {
+        update_energy_chart_with_history(history_data);
+        free_entity_history_data(history_data);
+        return true;
+    }
+
+    return false;
 }
 
 bool update_solar_chart_with_history(entity_history_t* history_data)
@@ -236,7 +323,7 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
         {
             if(prev_sample > history_data->max[i + 1])
             {
-                hourly_yield[i] = 0.0f; // Reset yield
+                hourly_yield[i] = history_data->max[i + 1]; // Reset yield
             }
             else
             {
@@ -276,7 +363,7 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
         // Refresh the chart to show new data
         lv_chart_refresh(solar_energy_chart);
 
-        log_info("Solar chart updated with %d historical yield points", data_count);
+        log_debug("Solar chart updated with %d historical yield points", data_count);
         return true;
     }
     return false;
@@ -291,7 +378,7 @@ bool fetch_solar(void)
     }
     else
     {
-        log_info("Requested solar yield history data");
+        log_debug("Requested solar yield history data");
     }
     return result;
 }
@@ -316,7 +403,8 @@ static void update_long_timer_cb(lv_timer_t* timer)
     static int fetch_state = 0;
     bool       result      = false;
 
-    log_info("fetch_state: %d", fetch_state);
+    if(ui_is_sleeping())
+        return;
 
     if(fetch_state == 0)
     {
@@ -339,6 +427,18 @@ static void update_long_timer_cb(lv_timer_t* timer)
     else if(fetch_state == 3)
     {
         result = update_solar_chart();
+        if(result)
+            fetch_state = 4;
+    }
+    else if(fetch_state == 4)
+    {
+        result = fetch_battery_consumption();
+        if(result)
+            fetch_state = 5;
+    }
+    else if(fetch_state == 5)
+    {
+        result = update_energy_chart();
         if(result)
             fetch_state = 0;
     }
@@ -585,28 +685,26 @@ void create_energy_container(lv_obj_t* right_column)
 
     // Add title to the chart
     lv_obj_t* chart_title = lv_label_create(hourly_chart_container);
-    lv_label_set_text(chart_title, "Hourly Battery Energy (Wh)");
+    lv_label_set_text(chart_title, "Hourly Battery Consumption (Ah)");
     lv_obj_set_style_pad_all(chart_title, -5, 0);
     lv_obj_align(chart_title, LV_ALIGN_TOP_MID, 0, 0);
 
-    // Set range for the chart to ensure all data points are visible
-    lv_chart_set_range(energy_chart, LV_CHART_AXIS_PRIMARY_Y, 0, 300);
+    // Set range for the chart to show consumption (always positive)
+    lv_chart_set_range(energy_chart, LV_CHART_AXIS_PRIMARY_Y, 0, 20);
 
     // Add data series for hourly energy
-    hourly_energy_series = lv_chart_add_series(energy_chart, lv_palette_main(LV_PALETTE_GREEN),
-                                               LV_CHART_AXIS_PRIMARY_Y);
+    hourly_energy_series =
+        lv_chart_add_series(energy_chart, lv_palette_main(LV_PALETTE_RED), LV_CHART_AXIS_PRIMARY_Y);
 
-    // Initialize chart with dummy data - using 24 hours
-    for(int i = 0; i < 48; i++)
-    {
-        // Generate random energy between 50 and 250 Wh
-        int energy = lv_rand(50, 250);
-        lv_chart_set_next_value(energy_chart, hourly_energy_series, energy);
-    }
+    // Set the chart type to bar
+    lv_chart_set_type(energy_chart, LV_CHART_TYPE_BAR);
 
     lv_chart_refresh(energy_chart); // Force refresh after all points are set
 }
 
+/**
+ * Creates container with solar power and hourly energy chart
+ */
 void create_solar_container(lv_obj_t* right_column)
 {
     // Main container for solar energy and hourly chart
