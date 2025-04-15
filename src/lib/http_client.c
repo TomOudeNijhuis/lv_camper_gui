@@ -159,10 +159,10 @@ http_response_t http_get(const char* url, int timeout_seconds)
     // Check for errors
     if(res != CURLE_OK)
     {
-        log_error("GET request failed: %s", curl_easy_strerror(res));
+        log_debug("GET request failed: %s", curl_easy_strerror(res));
         if(error_buffer[0])
         {
-            log_error("Additional info: %s", error_buffer);
+            log_debug("Additional info: %s", error_buffer);
             strcpy(response.error, error_buffer);
         }
         else

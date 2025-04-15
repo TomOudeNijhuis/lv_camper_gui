@@ -90,6 +90,13 @@ int init_background_fetcher(void)
         return 0;
     }
 
+    smart_solar.valid     = false;
+    smart_shunt.valid     = false;
+    camper.valid          = false;
+    inside_climate.valid  = false;
+    outside_climate.valid = false;
+    entity_history.valid  = false;
+
     worker_running    = true;
     fetch_requested   = false;
     action_queue_head = action_queue_tail = 0;
@@ -472,6 +479,12 @@ static int fetch_camper_data_internal(void)
             log_error("Response body: %s", response.body);
         }
         http_response_free(&response);
+
+        // Mark data as invalid
+        pthread_mutex_lock(&data_mutex);
+        camper.valid = false;
+        pthread_mutex_unlock(&data_mutex);
+
         return -1;
     }
 
@@ -479,6 +492,8 @@ static int fetch_camper_data_internal(void)
     camper_sensor_t temp_camper = {0};
     if(parse_camper_states(response.body, &temp_camper))
     {
+        temp_camper.valid = true;
+
         // Update the actual data structure in a thread-safe manner
         pthread_mutex_lock(&data_mutex);
         memcpy(&camper, &temp_camper, sizeof(camper_sensor_t));
@@ -490,6 +505,13 @@ static int fetch_camper_data_internal(void)
         log_debug("States: household=%s, pump=%s, water=%d%%, waste=%d%%",
                   camper.household_state ? "ON" : "OFF", camper.pump_state ? "ON" : "OFF",
                   camper.water_state, camper.waste_state);
+    }
+    else
+    {
+        // Mark data as invalid if parsing failed
+        pthread_mutex_lock(&data_mutex);
+        camper.valid = false;
+        pthread_mutex_unlock(&data_mutex);
     }
 
     http_response_free(&response);
@@ -512,6 +534,12 @@ static int fetch_inside_climate_data_internal(void)
             log_error("Response body: %s", response.body);
         }
         http_response_free(&response);
+
+        // Mark data as invalid
+        pthread_mutex_lock(&data_mutex);
+        inside_climate.valid = false;
+        pthread_mutex_unlock(&data_mutex);
+
         return -1;
     }
 
@@ -519,6 +547,9 @@ static int fetch_inside_climate_data_internal(void)
     climate_sensor_t temp_climate = {0};
     if(parse_climate_sensor(response.body, &temp_climate))
     {
+        // Set valid flag
+        temp_climate.valid = true;
+
         // Update the actual data structure in a thread-safe manner
         pthread_mutex_lock(&data_mutex);
         memcpy(&inside_climate, &temp_climate, sizeof(climate_sensor_t));
@@ -527,6 +558,13 @@ static int fetch_inside_climate_data_internal(void)
         // Debug output
         log_debug("Inside climate data updated: temperature=%.2f, humidity=%.2f, battery=%.2f",
                   inside_climate.temperature, inside_climate.humidity, inside_climate.battery);
+    }
+    else
+    {
+        // Mark data as invalid if parsing failed
+        pthread_mutex_lock(&data_mutex);
+        inside_climate.valid = false;
+        pthread_mutex_unlock(&data_mutex);
     }
 
     http_response_free(&response);
@@ -552,6 +590,12 @@ static int fetch_smart_solar_data_internal(void)
             log_error("Response body: %s", response.body);
         }
         http_response_free(&response);
+
+        // Mark data as invalid
+        pthread_mutex_lock(&data_mutex);
+        smart_solar.valid = false;
+        pthread_mutex_unlock(&data_mutex);
+
         return -1;
     }
 
@@ -559,6 +603,9 @@ static int fetch_smart_solar_data_internal(void)
     smart_solar_t temp_solar = {0};
     if(parse_smart_solar(response.body, &temp_solar))
     {
+        // Set valid flag
+        temp_solar.valid = true;
+
         // Update the actual data structure in a thread-safe manner
         pthread_mutex_lock(&data_mutex);
         memcpy(&smart_solar, &temp_solar, sizeof(smart_solar_t));
@@ -569,6 +616,13 @@ static int fetch_smart_solar_data_internal(void)
                   "yield=%.2f kWh",
                   smart_solar.battery_voltage, smart_solar.battery_charging_current,
                   smart_solar.solar_power, smart_solar.yield_today);
+    }
+    else
+    {
+        // Mark data as invalid if parsing failed
+        pthread_mutex_lock(&data_mutex);
+        smart_solar.valid = false;
+        pthread_mutex_unlock(&data_mutex);
     }
 
     http_response_free(&response);
@@ -594,6 +648,12 @@ static int fetch_smart_shunt_data_internal(void)
             log_error("Response body: %s", response.body);
         }
         http_response_free(&response);
+
+        // Mark data as invalid
+        pthread_mutex_lock(&data_mutex);
+        smart_shunt.valid = false;
+        pthread_mutex_unlock(&data_mutex);
+
         return -1;
     }
 
@@ -601,6 +661,9 @@ static int fetch_smart_shunt_data_internal(void)
     smart_shunt_t temp_shunt = {0};
     if(parse_smart_shunt(response.body, &temp_shunt))
     {
+        // Set valid flag
+        temp_shunt.valid = true;
+
         // Update the actual data structure in a thread-safe manner
         pthread_mutex_lock(&data_mutex);
         memcpy(&smart_shunt, &temp_shunt, sizeof(smart_shunt_t));
@@ -610,6 +673,13 @@ static int fetch_smart_shunt_data_internal(void)
         log_debug(
             "SmartShunt data updated: voltage=%.2f, current=%.2f, SoC=%.1f%%, remaining=%d mins",
             temp_shunt.voltage, temp_shunt.current, temp_shunt.soc, temp_shunt.remaining_mins);
+    }
+    else
+    {
+        // Mark data as invalid if parsing failed
+        pthread_mutex_lock(&data_mutex);
+        smart_shunt.valid = false;
+        pthread_mutex_unlock(&data_mutex);
     }
 
     http_response_free(&response);
@@ -646,6 +716,12 @@ static int fetch_entity_history_data_internal(void)
             log_error("Response body: %s", response.body);
         }
         http_response_free(&response);
+
+        // Mark data as invalid
+        pthread_mutex_lock(&data_mutex);
+        entity_history.valid = false;
+        pthread_mutex_unlock(&data_mutex);
+
         return -1;
     }
 
@@ -653,6 +729,9 @@ static int fetch_entity_history_data_internal(void)
     entity_history_t temp_history = {0};
     if(parse_entity_history(response.body, &temp_history))
     {
+        // Set valid flag
+        temp_history.valid = true;
+
         // Update the actual data structure in a thread-safe manner
         pthread_mutex_lock(&data_mutex);
 
@@ -671,6 +750,12 @@ static int fetch_entity_history_data_internal(void)
     {
         log_error("Failed to parse entity history data");
         clear_entity_history(&temp_history);
+
+        // Mark data as invalid
+        pthread_mutex_lock(&data_mutex);
+        entity_history.valid = false;
+        pthread_mutex_unlock(&data_mutex);
+
         http_response_free(&response);
         return -1;
     }
@@ -796,6 +881,7 @@ entity_history_t* get_entity_history_data(void)
             sizeof(history_copy->entity_name));
     strncpy(history_copy->unit, entity_history.unit, sizeof(history_copy->unit));
     history_copy->count = entity_history.count;
+    history_copy->valid = entity_history.valid;
 
     // Allocate and copy arrays
     history_copy->timestamps = NULL;

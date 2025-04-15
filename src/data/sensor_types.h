@@ -13,27 +13,30 @@ extern "C"
 
     typedef struct
     {
-        double battery_voltage;
-        double battery_charging_current;
-        char   charge_state[10];
-        double solar_power;
-        double yield_today;
+        float battery_voltage;
+        float battery_charging_current;
+        float solar_power;
+        float yield_today;
+        char  charge_state[32];
+        bool  valid;
     } smart_solar_t;
 
     typedef struct
     {
-        double voltage;
-        double current;
-        int    remaining_mins;
-        double soc;
-        double consumed_ah;
+        float voltage;
+        float current;
+        int   remaining_mins;
+        float soc;
+        float consumed_ah;
+        bool  valid;
     } smart_shunt_t;
 
     typedef struct
     {
-        double temperature;
-        double humidity;
-        double battery;
+        float temperature;
+        float humidity;
+        float battery;
+        bool  valid;
     } climate_sensor_t;
 
     typedef struct
@@ -42,9 +45,10 @@ extern "C"
         float starter_voltage;
         float mains_voltage;
         bool  household_state;
+        bool  pump_state;
         int   water_state; // Percentage 0-100
         int   waste_state; // Percentage 0-100
-        bool  pump_state;
+        bool  valid;
     } camper_sensor_t;
 
     /**
@@ -52,14 +56,15 @@ extern "C"
      */
     typedef struct
     {
-        bool   is_numeric;
-        char   entity_name[32];
+        char   entity_name[64];
         char   unit[16];
+        bool   is_numeric;
         int    count;
         char** timestamps;
         float* min;
         float* max;
         float* mean;
+        bool   valid;
     } entity_history_t;
 
 #ifdef __cplusplus

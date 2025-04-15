@@ -304,6 +304,9 @@ void create_status_column(lv_obj_t* left_column)
     lv_obj_set_style_bg_color(household_switch, lv_color_hex(0x008800),
                               LV_PART_INDICATOR | LV_STATE_CHECKED);
     lv_obj_add_event_cb(household_switch, household_event_handler, LV_EVENT_VALUE_CHANGED, NULL);
+    // Start in disabled state
+    lv_obj_add_state(household_switch, LV_STATE_DISABLED);
+    lv_obj_clear_state(household_switch, LV_STATE_CHECKED);
 
     // Pump switch with label
     lv_obj_t* pump_container = lv_obj_create(status_row_container);
@@ -322,6 +325,9 @@ void create_status_column(lv_obj_t* left_column)
     lv_obj_set_style_bg_color(pump_switch, lv_color_hex(0x008800),
                               LV_PART_INDICATOR | LV_STATE_CHECKED);
     lv_obj_add_event_cb(pump_switch, pump_event_handler, LV_EVENT_VALUE_CHANGED, NULL);
+    // Start in disabled state
+    lv_obj_add_state(pump_switch, LV_STATE_DISABLED);
+    lv_obj_clear_state(pump_switch, LV_STATE_CHECKED);
 
     // Mains LED with label
     lv_obj_t* mains_container = lv_obj_create(status_row_container);
@@ -387,9 +393,64 @@ void status_column_cleanup(void)
 
 void update_status_ui(camper_sensor_t* camper_data)
 {
-    // Update household switch
+    // Check if the data is valid before updating UI components
+    if(!camper_data->valid)
+    {
+        // Data is invalid - disable or reset all UI elements
+
+        // Disable switches
+        if(ui_household_switch)
+        {
+            lv_obj_add_state(ui_household_switch, LV_STATE_DISABLED);
+            lv_obj_clear_state(ui_household_switch, LV_STATE_CHECKED);
+        }
+
+        if(ui_pump_switch)
+        {
+            lv_obj_add_state(ui_pump_switch, LV_STATE_DISABLED);
+            lv_obj_clear_state(ui_pump_switch, LV_STATE_CHECKED);
+        }
+
+        // Turn off mains LED and set to gray
+        if(ui_mains_led)
+        {
+            lv_led_off(ui_mains_led);
+            lv_led_set_color(ui_mains_led, lv_color_hex(0x808080));
+        }
+
+        // Reset water and waste bars to 0%
+        if(ui_water_bar)
+        {
+            lv_bar_set_value(ui_water_bar, 0, LV_ANIM_OFF);
+            lv_obj_set_style_bg_color(ui_water_bar, lv_palette_main(LV_PALETTE_BLUE),
+                                      LV_PART_INDICATOR);
+        }
+
+        if(ui_waste_bar)
+        {
+            lv_bar_set_value(ui_waste_bar, 0, LV_ANIM_OFF);
+            lv_obj_set_style_bg_color(ui_waste_bar, lv_palette_main(LV_PALETTE_ORANGE),
+                                      LV_PART_INDICATOR);
+        }
+
+        // Reset battery gauges to 0 (which will trigger the existing logic to show "-----")
+        if(ui_starter_battery && ui_starter_battery_needle)
+        {
+            update_battery_gauge(ui_starter_battery, ui_starter_battery_needle, 0);
+        }
+
+        if(ui_household_battery && ui_household_battery_needle)
+        {
+            update_battery_gauge(ui_household_battery, ui_household_battery_needle, 0);
+        }
+
+        return;
+    }
+
+    // Data is valid - enable switches and update with real values
     if(ui_household_switch)
     {
+        lv_obj_clear_state(ui_household_switch, LV_STATE_DISABLED);
         bool current_state = lv_obj_has_state(ui_household_switch, LV_STATE_CHECKED);
         if(current_state != camper_data->household_state)
         {
@@ -407,6 +468,7 @@ void update_status_ui(camper_sensor_t* camper_data)
     // Update pump switch
     if(ui_pump_switch)
     {
+        lv_obj_clear_state(ui_pump_switch, LV_STATE_DISABLED);
         bool current_state = lv_obj_has_state(ui_pump_switch, LV_STATE_CHECKED);
         if(current_state != camper_data->pump_state)
         {

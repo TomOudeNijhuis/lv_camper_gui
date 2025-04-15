@@ -198,15 +198,33 @@ bool fetch_climate(void)
 
 bool update_climate_chart(void)
 {
-
     // Check if historical data is available
     entity_history_t* history_data = get_entity_history_data();
-    if(history_data != NULL && history_data->count > 0)
+
+    if(history_data != NULL && history_data->valid)
     {
         update_climate_chart_with_history(history_data);
         free_entity_history_data(history_data);
-
         return true;
+    }
+
+    // Clear chart when data is invalid
+    if(chart != NULL && temp_series != NULL && temp_min_series != NULL)
+    {
+        lv_chart_set_all_value(chart, temp_series, LV_CHART_POINT_NONE);
+        lv_chart_set_all_value(chart, temp_min_series, LV_CHART_POINT_NONE);
+        lv_chart_refresh(chart);
+
+        // Reset min/max labels if they exist
+        lv_obj_t* children = lv_obj_get_child(chart, 0);
+        while(children)
+        {
+            if(lv_obj_check_type(children, &lv_label_class))
+            {
+                lv_obj_del(children);
+            }
+            children = lv_obj_get_child(chart, lv_obj_get_index(children) + 1);
+        }
     }
 
     return false;
@@ -214,7 +232,8 @@ bool update_climate_chart(void)
 
 bool update_energy_chart_with_history(entity_history_t* history_data)
 {
-    if(energy_chart != NULL && hourly_energy_series != NULL && history_data != NULL)
+    if(energy_chart != NULL && hourly_energy_series != NULL && history_data != NULL &&
+       history_data->valid)
     {
         // Clear existing data
         lv_chart_set_all_value(energy_chart, hourly_energy_series, 0);
@@ -353,11 +372,29 @@ bool update_energy_chart(void)
 {
     // Check if historical data is available
     entity_history_t* history_data = get_entity_history_data();
-    if(history_data != NULL && history_data->count > 0)
+    if(history_data != NULL && history_data->valid)
     {
         update_energy_chart_with_history(history_data);
         free_entity_history_data(history_data);
         return true;
+    }
+
+    // Clear chart when data is invalid
+    if(energy_chart != NULL && hourly_energy_series != NULL)
+    {
+        lv_chart_set_all_value(energy_chart, hourly_energy_series, LV_CHART_POINT_NONE);
+        lv_chart_refresh(energy_chart);
+
+        // Reset max value label if it exists
+        lv_obj_t* children = lv_obj_get_child(energy_chart, 0);
+        while(children)
+        {
+            if(lv_obj_check_type(children, &lv_label_class))
+            {
+                lv_obj_del(children);
+            }
+            children = lv_obj_get_child(energy_chart, lv_obj_get_index(children) + 1);
+        }
     }
 
     return false;
@@ -365,7 +402,8 @@ bool update_energy_chart(void)
 
 bool update_solar_chart_with_history(entity_history_t* history_data)
 {
-    if(solar_energy_chart != NULL && solar_hourly_energy_series != NULL && history_data != NULL)
+    if(solar_energy_chart != NULL && solar_hourly_energy_series != NULL && history_data != NULL &&
+       history_data->valid)
     {
         // Clear existing data
         lv_chart_set_all_value(solar_energy_chart, solar_hourly_energy_series, 0);
@@ -507,7 +545,7 @@ bool update_solar_chart(void)
 {
     // Check if historical data is available
     entity_history_t* history_data = get_entity_history_data();
-    if((history_data != NULL) && (history_data->count > 0))
+    if((history_data != NULL) && (history_data->count > 0) && history_data->valid)
     {
         update_solar_chart_with_history(history_data);
         free_entity_history_data(history_data);
@@ -515,18 +553,33 @@ bool update_solar_chart(void)
         return true;
     }
 
+    // Clear chart when data is invalid
+    if(solar_energy_chart != NULL && solar_hourly_energy_series != NULL)
+    {
+        lv_chart_set_all_value(solar_energy_chart, solar_hourly_energy_series, LV_CHART_POINT_NONE);
+        lv_chart_refresh(solar_energy_chart);
+    }
+
     return false;
 }
 
 static void update_long_timer_cb(lv_timer_t* timer)
 {
-    static int fetch_state = 0;
-    bool       result      = false;
+    static int fetch_state    = 0;
+    bool       result         = false;
+    static int fetch_interval = 0;
+    static int fetch_valid    = 0;
 
     if(ui_is_sleeping())
     {
-        fetch_state = 0;
-        lv_timer_set_period(timer, DATA_UPDATE_INTERVAL_MS);
+        fetch_state    = 0;
+        fetch_interval = 0;
+        return;
+    }
+
+    if(fetch_interval > 0)
+    {
+        fetch_interval -= 1;
         return;
     }
 
@@ -534,40 +587,54 @@ static void update_long_timer_cb(lv_timer_t* timer)
     {
         result = fetch_climate();
         if(result)
-            fetch_state = 1;
+            fetch_valid = 1;
+
+        fetch_state = 1;
     }
     else if(fetch_state == 1)
     {
         result = update_climate_chart();
         if(result)
-            fetch_state = 2;
+            fetch_valid += 1;
+
+        fetch_state = 2;
     }
     else if(fetch_state == 2)
     {
         result = fetch_solar();
         if(result)
-            fetch_state = 3;
+            fetch_valid += 1;
+
+        fetch_state = 3;
     }
     else if(fetch_state == 3)
     {
         result = update_solar_chart();
         if(result)
-            fetch_state = 4;
+            fetch_valid += 1;
+
+        fetch_state = 4;
     }
     else if(fetch_state == 4)
     {
         result = fetch_battery_consumption();
         if(result)
-            fetch_state = 5;
+            fetch_valid += 1;
+
+        fetch_state = 5;
     }
     else if(fetch_state == 5)
     {
         result = update_energy_chart();
         if(result)
-        {
-            fetch_state = 0;
-            lv_timer_set_period(timer, 60000);
-        }
+            fetch_valid += 1;
+
+        fetch_state = 0;
+        fetch_valid = 0;
+        if(fetch_valid >= 5)
+            fetch_interval = 5;
+        else
+            fetch_interval = 0;
     }
 }
 
@@ -595,12 +662,26 @@ static void update_timer_cb(lv_timer_t* timer)
     climate_sensor_t* climate_data = get_inside_climate_data();
     if(temperature_label != NULL)
     {
-        lv_label_set_text_fmt(temperature_label, "%.1f °C", climate_data->temperature);
+        if(climate_data->valid)
+        {
+            lv_label_set_text_fmt(temperature_label, "%.1f °C", climate_data->temperature);
+        }
+        else
+        {
+            lv_label_set_text(temperature_label, "--- °C");
+        }
     }
 
     if(humidity_label != NULL)
     {
-        lv_label_set_text_fmt(humidity_label, "%.1f%%", climate_data->humidity);
+        if(climate_data->valid)
+        {
+            lv_label_set_text_fmt(humidity_label, "%.1f%%", climate_data->humidity);
+        }
+        else
+        {
+            lv_label_set_text(humidity_label, "--- %");
+        }
     }
 
     smart_shunt_t* shunt_data = get_smart_shunt_data();
@@ -608,24 +689,53 @@ static void update_timer_cb(lv_timer_t* timer)
     // Update battery energy label
     if(power_label != NULL)
     {
-        lv_label_set_text_fmt(power_label, "%.1f W", shunt_data->current * shunt_data->voltage);
+        if(shunt_data->valid)
+        {
+            lv_label_set_text_fmt(power_label, "%.1f W", shunt_data->current * shunt_data->voltage);
+        }
+        else
+        {
+            lv_label_set_text(power_label, "--- W");
+        }
     }
+
     if(battery_status_label != NULL)
     {
-        lv_label_set_text_fmt(battery_status_label, "%.1f%%", shunt_data->soc);
+        if(shunt_data->valid)
+        {
+            lv_label_set_text_fmt(battery_status_label, "%.1f%%", shunt_data->soc);
+        }
+        else
+        {
+            lv_label_set_text(battery_status_label, "--- %");
+        }
     }
 
     smart_solar_t* solar_data = get_smart_solar_data();
 
-    // Update battery energy label
+    // Update solar power label
     if(solar_power_label != NULL)
     {
-        lv_label_set_text_fmt(solar_power_label, "%.0f W", solar_data->solar_power);
+        if(solar_data->valid)
+        {
+            lv_label_set_text_fmt(solar_power_label, "%.0f W", solar_data->solar_power);
+        }
+        else
+        {
+            lv_label_set_text(solar_power_label, "--- W");
+        }
     }
 
     if(solar_state_label != NULL)
     {
-        lv_label_set_text_fmt(solar_state_label, "%s", solar_data->charge_state);
+        if(solar_data->valid)
+        {
+            lv_label_set_text_fmt(solar_state_label, "%s", solar_data->charge_state);
+        }
+        else
+        {
+            lv_label_set_text(solar_state_label, "---");
+        }
     }
 }
 
@@ -940,7 +1050,7 @@ void create_energy_temp_panel(lv_obj_t* right_column)
 
     // Create a timer to update the values periodically
     update_timer      = lv_timer_create(update_timer_cb, DATA_UPDATE_INTERVAL_MS, NULL);
-    update_long_timer = lv_timer_create(update_long_timer_cb, DATA_UPDATE_INTERVAL_MS, NULL);
+    update_long_timer = lv_timer_create(update_long_timer_cb, DATA_CHART_UPDATE_INTERVAL_MS, NULL);
     log_info("Energy and temperature panel created");
 }
 

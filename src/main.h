@@ -48,28 +48,26 @@ extern "C"
  ****************************************************************************/
 
 /* Display power management */
-#define DISPLAY_INACTIVITY_TIMEOUT_MS 120000 /* Time until screen blanks in ms */
-
-#define DAY_MODE_BRIGHTNESS 100  // Day mode brightness percentage
-#define NIGHT_MODE_BRIGHTNESS 40 // Night mode brightness percentage
+#define DISPLAY_INACTIVITY_TIMEOUT_MS 120017 /* Time until screen blanks in ms */
 
 /****************************************************************************
  * Network Constants
  ****************************************************************************/
 
 /* API endpoints */
-#define API_BASE_URL "http://camperpi.local:8000"
+#define API_BASE_URL "http://localhost:8000"
 
 /* Network timeouts */
-#define HTTP_TIMEOUT_SECONDS 5 /* HTTP request timeout in seconds */
+#define HTTP_TIMEOUT_SECONDS 7 /* HTTP request timeout in seconds */
 
     /****************************************************************************
      * Data Update Intervals
      ****************************************************************************/
 
-#define DATA_UPDATE_INTERVAL_MS 10000    /* Data refresh interval in ms */
-#define LOG_REFRESH_INTERVAL_MS 3000     /* Log display refresh interval in ms */
-#define BACKGROUND_FETCH_SLEEP_US 200000 /* Background fetcher sleep time in microseconds */
+#define DATA_UPDATE_INTERVAL_MS 5003       /* Data refresh interval in ms */
+#define DATA_CHART_UPDATE_INTERVAL_MS 3001 /* Chart refresh interval */
+#define LOG_REFRESH_INTERVAL_MS 2999       /* Log display refresh interval in ms */
+#define BACKGROUND_FETCH_SLEEP_US 199999   /* Background fetcher sleep time in microseconds */
 
 #define MAX_LOG_ENTRIES 100              /* Maximum number of log entries to keep */
 #define INITIAL_LOG_LEVEL LOG_LEVEL_INFO /* Initial log level for displaying logs */
