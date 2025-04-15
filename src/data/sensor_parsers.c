@@ -289,19 +289,20 @@ bool parse_camper_states(const char* json_str, camper_sensor_t* camper_data)
         // Map entity_name to the appropriate field in the camper structure
         if(strcmp(entity_name, "household_voltage") == 0)
         {
-            temp_camper.household_voltage = atof(state_str) / 1000.0f; // Assuming millivolts
+            temp_camper.household_voltage = atof(state_str) / 1000.0f; // millivolts
         }
         else if(strcmp(entity_name, "starter_voltage") == 0)
         {
-            temp_camper.starter_voltage = atof(state_str) / 1000.0f; // Assuming millivolts
+            temp_camper.starter_voltage = atof(state_str) / 1000.0f; // millivolts
         }
         else if(strcmp(entity_name, "mains_voltage") == 0)
         {
-            temp_camper.mains_voltage = atof(state_str);
+            temp_camper.mains_voltage = atof(state_str) / 1000.0f; // millivolts
         }
         else if(strcmp(entity_name, "household_state") == 0)
         {
-            temp_camper.household_state = (strcmp(state_str, "ON") == 0);
+            temp_camper.household_state =
+                (strcmp(state_str, "ON") == 0 || strcmp(state_str, "PENDING") == 0);
         }
         else if(strcmp(entity_name, "water_level") == 0)
         {
