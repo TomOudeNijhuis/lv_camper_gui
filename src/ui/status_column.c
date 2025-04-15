@@ -11,6 +11,7 @@
 
 #include "../lib/logger.h"
 #include "../lib/http_client.h"
+#include "../lib/wifi.h" // Add the Wi-Fi header
 #include "lvgl/lvgl.h"
 #include "../data/sensor_types.h"
 #include "../data/data_manager.h"
@@ -26,6 +27,9 @@ static lv_obj_t*   ui_starter_battery          = NULL;
 static lv_obj_t*   ui_starter_battery_needle   = NULL;
 static lv_obj_t*   ui_household_battery        = NULL;
 static lv_obj_t*   ui_household_battery_needle = NULL;
+static lv_obj_t*   ui_wifi_icon                = NULL; // Wi-Fi signal icon
+static lv_obj_t*   ui_wifi_label               = NULL; // Wi-Fi SSID label
+static lv_obj_t*   ui_wifi_strength            = NULL; // Wi-Fi signal strength
 static lv_timer_t* update_timer                = NULL;
 
 void update_status_ui(camper_sensor_t* camper_data);
@@ -114,6 +118,9 @@ static void data_update_timer_cb(lv_timer_t* timer)
         {
             log_warning("Failed to request data fetch");
         }
+
+        // Update Wi-Fi status
+        wifi_update();
 
         // Update UI with latest data regardless of whether new data is being fetched
         update_status_ui(get_camper_data());
@@ -270,6 +277,43 @@ static lv_obj_t* create_level_bar(lv_obj_t* parent, const char* label_text, int 
     return bar;
 }
 
+// Create Wi-Fi status container
+static lv_obj_t* create_wifi_status(lv_obj_t* parent)
+{
+    // Create container for Wi-Fi status
+    lv_obj_t* wifi_container = lv_obj_create(parent);
+    lv_obj_set_size(wifi_container, lv_pct(100), 45); // Reduced from 60 to 45
+    lv_obj_set_style_pad_all(wifi_container, 5, 0);
+    lv_obj_set_style_border_width(wifi_container, 0, 0);
+    lv_obj_set_style_bg_opa(wifi_container, LV_OPA_TRANSP, 0);
+
+    // Use row layout for elements
+    lv_obj_set_flex_flow(wifi_container, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(wifi_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+
+    // Create Wi-Fi icon
+    ui_wifi_icon = lv_label_create(wifi_container);
+    lv_label_set_text(ui_wifi_icon, LV_SYMBOL_WIFI);
+    lv_obj_set_style_text_font(ui_wifi_icon, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(ui_wifi_icon, lv_color_hex(0x808080), 0); // Default to gray
+
+    // Create Wi-Fi SSID label
+    ui_wifi_label = lv_label_create(wifi_container);
+    lv_label_set_text(ui_wifi_label, "Not connected");
+    lv_obj_set_style_text_font(ui_wifi_label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_pad_left(ui_wifi_label, 10, 0);
+
+    // Create signal strength label - make it grow to push it to the right
+    ui_wifi_strength = lv_label_create(wifi_container);
+    lv_label_set_text(ui_wifi_strength, "");
+    lv_obj_set_style_text_font(ui_wifi_strength, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_align(ui_wifi_strength, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_flex_grow(ui_wifi_strength, 1);
+
+    return wifi_container;
+}
+
 void create_status_column(lv_obj_t* left_column)
 {
     // Set up left column as a vertical container
@@ -379,7 +423,14 @@ void create_status_column(lv_obj_t* left_column)
     ui_household_battery = create_battery_gauge(voltage_container, "Household Voltage", 0,
                                                 &ui_household_battery_needle);
 
+    // Add Wi-Fi status container below batteries with minimal top margin
+    lv_obj_t* wifi_container = create_wifi_status(left_column);
+    lv_obj_set_style_margin_top(wifi_container, 0, 0); // Ensure no extra margin
+
     update_timer = lv_timer_create(data_update_timer_cb, DATA_UPDATE_INTERVAL_MS, NULL);
+
+    // Initialize Wi-Fi monitoring
+    wifi_init();
 }
 
 void status_column_cleanup(void)
@@ -443,106 +494,142 @@ void update_status_ui(camper_sensor_t* camper_data)
         {
             update_battery_gauge(ui_household_battery, ui_household_battery_needle, 0);
         }
-
-        return;
     }
-
-    // Data is valid - enable switches and update with real values
-    if(ui_household_switch)
+    else
     {
-        lv_obj_clear_state(ui_household_switch, LV_STATE_DISABLED);
-        bool current_state = lv_obj_has_state(ui_household_switch, LV_STATE_CHECKED);
-        if(current_state != camper_data->household_state)
+        // Data is valid - enable switches and update with real values
+        if(ui_household_switch)
         {
-            if(camper_data->household_state)
+            lv_obj_clear_state(ui_household_switch, LV_STATE_DISABLED);
+            bool current_state = lv_obj_has_state(ui_household_switch, LV_STATE_CHECKED);
+            if(current_state != camper_data->household_state)
             {
-                lv_obj_add_state(ui_household_switch, LV_STATE_CHECKED);
+                if(camper_data->household_state)
+                {
+                    lv_obj_add_state(ui_household_switch, LV_STATE_CHECKED);
+                }
+                else
+                {
+                    lv_obj_clear_state(ui_household_switch, LV_STATE_CHECKED);
+                }
+            }
+        }
+
+        // Update pump switch
+        if(ui_pump_switch)
+        {
+            lv_obj_clear_state(ui_pump_switch, LV_STATE_DISABLED);
+            bool current_state = lv_obj_has_state(ui_pump_switch, LV_STATE_CHECKED);
+            if(current_state != camper_data->pump_state)
+            {
+                if(camper_data->pump_state)
+                {
+                    lv_obj_add_state(ui_pump_switch, LV_STATE_CHECKED);
+                }
+                else
+                {
+                    lv_obj_clear_state(ui_pump_switch, LV_STATE_CHECKED);
+                }
+            }
+        }
+
+        // Update mains LED
+        if(ui_mains_led)
+        {
+            // Mains is detected if voltage is above 200V (assuming European 230V system)
+            if(camper_data->mains_voltage > 6.0f)
+            {
+                lv_led_on(ui_mains_led);
+                lv_led_set_color(ui_mains_led,
+                                 lv_color_hex(0x00FF00)); // Green when mains connected
             }
             else
             {
-                lv_obj_clear_state(ui_household_switch, LV_STATE_CHECKED);
+                lv_led_off(ui_mains_led);
+                lv_led_set_color(ui_mains_led, lv_color_hex(0x808080)); // Gray when disconnected
             }
         }
-    }
 
-    // Update pump switch
-    if(ui_pump_switch)
-    {
-        lv_obj_clear_state(ui_pump_switch, LV_STATE_DISABLED);
-        bool current_state = lv_obj_has_state(ui_pump_switch, LV_STATE_CHECKED);
-        if(current_state != camper_data->pump_state)
+        // Update water level bar
+        if(ui_water_bar)
         {
-            if(camper_data->pump_state)
+            lv_bar_set_value(ui_water_bar, camper_data->water_state, LV_ANIM_ON);
+
+            // Add warning indicator if water level is low
+            if(camper_data->water_state < WATER_LOW_THRESHOLD)
             {
-                lv_obj_add_state(ui_pump_switch, LV_STATE_CHECKED);
+                lv_obj_set_style_bg_color(ui_water_bar, lv_color_hex(0xFF8000), LV_PART_INDICATOR);
             }
             else
             {
-                lv_obj_clear_state(ui_pump_switch, LV_STATE_CHECKED);
+                lv_obj_set_style_bg_color(ui_water_bar, lv_palette_main(LV_PALETTE_BLUE),
+                                          LV_PART_INDICATOR);
             }
         }
+
+        // Update waste level bar
+        if(ui_waste_bar)
+        {
+            lv_bar_set_value(ui_waste_bar, camper_data->waste_state, LV_ANIM_ON);
+
+            // Add warning indicator if waste level is high
+            if(camper_data->waste_state > WASTE_HIGH_THRESHOLD)
+            {
+                lv_obj_set_style_bg_color(ui_waste_bar, lv_color_hex(0xFF0000), LV_PART_INDICATOR);
+            }
+            else
+            {
+                lv_obj_set_style_bg_color(ui_waste_bar, lv_palette_main(LV_PALETTE_ORANGE),
+                                          LV_PART_INDICATOR);
+            }
+        }
+
+        // Update battery gauges
+        if(ui_starter_battery && ui_starter_battery_needle)
+        {
+            update_battery_gauge(ui_starter_battery, ui_starter_battery_needle,
+                                 camper_data->starter_voltage);
+        }
+
+        if(ui_household_battery && ui_household_battery_needle)
+        {
+            update_battery_gauge(ui_household_battery, ui_household_battery_needle,
+                                 camper_data->household_voltage);
+        }
     }
 
-    // Update mains LED
-    if(ui_mains_led)
+    // Update Wi-Fi status
+    if(ui_wifi_icon && ui_wifi_label && ui_wifi_strength)
     {
-        // Mains is detected if voltage is above 200V (assuming European 230V system)
-        if(camper_data->mains_voltage > 6.0f)
+        wifi_status_t wifi_status = wifi_get_status();
+
+        if(wifi_status.wifi_connected)
         {
-            lv_led_on(ui_mains_led);
-            lv_led_set_color(ui_mains_led, lv_color_hex(0x00FF00)); // Green when mains connected
+            // Set Wi-Fi icon color based on signal strength
+            if(wifi_status.wifi_signal_strength > 70)
+            {
+                lv_obj_set_style_text_color(ui_wifi_icon, lv_color_hex(0x00C853),
+                                            0); // Good - green
+            }
+            else if(wifi_status.wifi_signal_strength > 30)
+            {
+                lv_obj_set_style_text_color(ui_wifi_icon, lv_color_hex(0xFF8000), 0); // OK - orange
+            }
+            else
+            {
+                lv_obj_set_style_text_color(ui_wifi_icon, lv_color_hex(0xFF0000), 0); // Poor - red
+            }
+
+            // Update SSID and signal strength
+            lv_label_set_text(ui_wifi_label, wifi_status.wifi_ssid);
+            lv_label_set_text_fmt(ui_wifi_strength, "%d%%", wifi_status.wifi_signal_strength);
         }
         else
         {
-            lv_led_off(ui_mains_led);
-            lv_led_set_color(ui_mains_led, lv_color_hex(0x808080)); // Gray when disconnected
+            // Not connected
+            lv_obj_set_style_text_color(ui_wifi_icon, lv_color_hex(0x808080), 0); // Gray
+            lv_label_set_text(ui_wifi_label, "Not connected");
+            lv_label_set_text(ui_wifi_strength, "");
         }
-    }
-
-    // Update water level bar
-    if(ui_water_bar)
-    {
-        lv_bar_set_value(ui_water_bar, camper_data->water_state, LV_ANIM_ON);
-
-        // Add warning indicator if water level is low
-        if(camper_data->water_state < WATER_LOW_THRESHOLD)
-        {
-            lv_obj_set_style_bg_color(ui_water_bar, lv_color_hex(0xFF8000), LV_PART_INDICATOR);
-        }
-        else
-        {
-            lv_obj_set_style_bg_color(ui_water_bar, lv_palette_main(LV_PALETTE_BLUE),
-                                      LV_PART_INDICATOR);
-        }
-    }
-
-    // Update waste level bar
-    if(ui_waste_bar)
-    {
-        lv_bar_set_value(ui_waste_bar, camper_data->waste_state, LV_ANIM_ON);
-
-        // Add warning indicator if waste level is high
-        if(camper_data->waste_state > WASTE_HIGH_THRESHOLD)
-        {
-            lv_obj_set_style_bg_color(ui_waste_bar, lv_color_hex(0xFF0000), LV_PART_INDICATOR);
-        }
-        else
-        {
-            lv_obj_set_style_bg_color(ui_waste_bar, lv_palette_main(LV_PALETTE_ORANGE),
-                                      LV_PART_INDICATOR);
-        }
-    }
-
-    // Update battery gauges
-    if(ui_starter_battery && ui_starter_battery_needle)
-    {
-        update_battery_gauge(ui_starter_battery, ui_starter_battery_needle,
-                             camper_data->starter_voltage);
-    }
-
-    if(ui_household_battery && ui_household_battery_needle)
-    {
-        update_battery_gauge(ui_household_battery, ui_household_battery_needle,
-                             camper_data->household_voltage);
     }
 }
