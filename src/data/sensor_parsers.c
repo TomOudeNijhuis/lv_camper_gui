@@ -52,6 +52,9 @@ bool parse_smart_solar(const char* json_str, smart_solar_t* solar_data)
     // Create a temporary solar data structure
     smart_solar_t temp_solar = {0};
 
+    // Counter for required fields
+    int field_count = 0;
+
     // Iterate through entities in the array
     int array_len = json_object_array_length(parsed_json);
     for(int i = 0; i < array_len; i++)
@@ -72,24 +75,37 @@ bool parse_smart_solar(const char* json_str, smart_solar_t* solar_data)
         if(strcmp(entity_name, "battery_charging_current") == 0)
         {
             temp_solar.battery_charging_current = atof(state_str);
+            field_count++;
         }
         else if(strcmp(entity_name, "battery_voltage") == 0)
         {
             temp_solar.battery_voltage = atof(state_str);
+            field_count++;
         }
         else if(strcmp(entity_name, "charge_state") == 0)
         {
             strncpy(temp_solar.charge_state, state_str, sizeof(temp_solar.charge_state) - 1);
             temp_solar.charge_state[sizeof(temp_solar.charge_state) - 1] = '\0';
+            field_count++;
         }
         else if(strcmp(entity_name, "solar_power") == 0)
         {
             temp_solar.solar_power = atof(state_str);
+            field_count++;
         }
         else if(strcmp(entity_name, "yield_today") == 0)
         {
             temp_solar.yield_today = atof(state_str);
+            field_count++;
         }
+    }
+
+    // Check if we found at least 5 required fields
+    if(field_count < 5)
+    {
+        log_error("Smart solar data must contain at least 5 fields");
+        json_object_put(parsed_json);
+        return false;
     }
 
     // Copy the temp structure to the output parameter
@@ -128,6 +144,9 @@ bool parse_smart_shunt(const char* json_str, smart_shunt_t* shunt_data)
     // Create a temporary shunt data structure
     smart_shunt_t temp_shunt = {0};
 
+    // Counter for required fields
+    int field_count = 0;
+
     // Iterate through entities in the array
     int array_len = json_object_array_length(parsed_json);
     for(int i = 0; i < array_len; i++)
@@ -148,23 +167,36 @@ bool parse_smart_shunt(const char* json_str, smart_shunt_t* shunt_data)
         if(strcmp(entity_name, "voltage") == 0)
         {
             temp_shunt.voltage = atof(state_str);
+            field_count++;
         }
         else if(strcmp(entity_name, "current") == 0)
         {
             temp_shunt.current = atof(state_str);
+            field_count++;
         }
         else if(strcmp(entity_name, "remaining_mins") == 0)
         {
             temp_shunt.remaining_mins = atoi(state_str);
+            field_count++;
         }
         else if(strcmp(entity_name, "soc") == 0)
         {
             temp_shunt.soc = atof(state_str);
+            field_count++;
         }
         else if(strcmp(entity_name, "consumed_ah") == 0)
         {
             temp_shunt.consumed_ah = atof(state_str);
+            field_count++;
         }
+    }
+
+    // Check if we found at least 5 required fields
+    if(field_count < 5)
+    {
+        log_error("Smart shunt data must contain at least 5 fields");
+        json_object_put(parsed_json);
+        return false;
     }
 
     // Copy the temp structure to the output parameter
@@ -203,6 +235,9 @@ bool parse_climate_sensor(const char* json_str, climate_sensor_t* climate)
     // Create a temporary climate data structure
     climate_sensor_t temp_climate = {0};
 
+    // Counter for required fields
+    int field_count = 0;
+
     // Iterate through entities in the array
     int array_len = json_object_array_length(parsed_json);
     for(int i = 0; i < array_len; i++)
@@ -223,15 +258,26 @@ bool parse_climate_sensor(const char* json_str, climate_sensor_t* climate)
         if(strcmp(entity_name, "battery") == 0)
         {
             temp_climate.battery = atof(state_str);
+            field_count++;
         }
         else if(strcmp(entity_name, "temperature") == 0)
         {
             temp_climate.temperature = atof(state_str);
+            field_count++;
         }
         else if(strcmp(entity_name, "humidity") == 0)
         {
             temp_climate.humidity = atof(state_str);
+            field_count++;
         }
+    }
+
+    // Check if we found at least 3 required fields
+    if(field_count < 3)
+    {
+        log_error("Climate sensor data must contain at least 3 fields");
+        json_object_put(parsed_json);
+        return false;
     }
 
     // Copy the temp structure to the output parameter
@@ -270,6 +316,9 @@ bool parse_camper_states(const char* json_str, camper_sensor_t* camper_data)
     // Create a temporary camper data structure
     camper_sensor_t temp_camper = {0};
 
+    // Counter for required fields
+    int field_count = 0;
+
     // Iterate through states in the array
     int array_len = json_object_array_length(parsed_json);
     for(int i = 0; i < array_len; i++)
@@ -290,32 +339,47 @@ bool parse_camper_states(const char* json_str, camper_sensor_t* camper_data)
         if(strcmp(entity_name, "household_voltage") == 0)
         {
             temp_camper.household_voltage = atof(state_str) / 1000.0f; // millivolts
+            field_count++;
         }
         else if(strcmp(entity_name, "starter_voltage") == 0)
         {
             temp_camper.starter_voltage = atof(state_str) / 1000.0f; // millivolts
+            field_count++;
         }
         else if(strcmp(entity_name, "mains_voltage") == 0)
         {
             temp_camper.mains_voltage = atof(state_str) / 1000.0f; // millivolts
+            field_count++;
         }
         else if(strcmp(entity_name, "household_state") == 0)
         {
             temp_camper.household_state =
                 (strcmp(state_str, "ON") == 0 || strcmp(state_str, "PENDING") == 0);
+            field_count++;
         }
-        else if(strcmp(entity_name, "water_level") == 0)
+        else if(strcmp(entity_name, "water_state") == 0)
         {
             temp_camper.water_state = atoi(state_str);
+            field_count++;
         }
-        else if(strcmp(entity_name, "waste_level") == 0)
+        else if(strcmp(entity_name, "waste_state") == 0)
         {
             temp_camper.waste_state = atoi(state_str);
+            field_count++;
         }
         else if(strcmp(entity_name, "pump_state") == 0)
         {
             temp_camper.pump_state = (strcmp(state_str, "ON") == 0);
+            field_count++;
         }
+    }
+
+    // Check if we found at least 7 required fields
+    if(field_count < 7)
+    {
+        log_error("Camper states data must contain at least 7 fields found %d", field_count);
+        json_object_put(parsed_json);
+        return false;
     }
 
     // Copy the temp structure to the output parameter

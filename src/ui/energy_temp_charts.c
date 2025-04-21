@@ -43,6 +43,14 @@ static int   temp_data_count        = 0;
 static bool  internal_data_valid    = false;
 static bool  external_data_valid    = false;
 
+// Add static variables for min/max lines and labels
+static lv_obj_t*          internal_max_line  = NULL;
+static lv_obj_t*          external_max_line  = NULL;
+static lv_obj_t*          internal_max_label = NULL;
+static lv_obj_t*          external_max_label = NULL;
+static lv_point_precise_t internal_max_line_points[2];
+static lv_point_precise_t external_max_line_points[2];
+
 // Split the update_climate_chart_with_history to handle one source at a time
 void update_climate_chart_with_history(entity_history_t* history_data, bool is_internal)
 {
@@ -99,6 +107,10 @@ void refresh_climate_chart(void)
     float max_temp_overall = -100.0f; // Start with low value
     bool  range_set        = false;
 
+    // Find min/max for each series
+    float internal_max_temp = -100.0f;
+    float external_max_temp = -100.0f;
+
     // Consider internal temperature values if valid
     if(internal_data_valid)
     {
@@ -108,6 +120,8 @@ void refresh_climate_chart(void)
                 min_temp_overall = internal_temp_data[i];
             if(internal_temp_data[i] > max_temp_overall)
                 max_temp_overall = internal_temp_data[i];
+            if(internal_temp_data[i] > internal_max_temp)
+                internal_max_temp = internal_temp_data[i];
         }
         range_set = true;
     }
@@ -121,6 +135,8 @@ void refresh_climate_chart(void)
                 min_temp_overall = external_temp_data[i];
             if(external_temp_data[i] > max_temp_overall)
                 max_temp_overall = external_temp_data[i];
+            if(external_temp_data[i] > external_max_temp)
+                external_max_temp = external_temp_data[i];
         }
         range_set = true;
     }
@@ -172,6 +188,12 @@ void refresh_climate_chart(void)
         }
     }
 
+    // Reset pointers after deletion
+    internal_max_line  = NULL;
+    external_max_line  = NULL;
+    internal_max_label = NULL;
+    external_max_label = NULL;
+
     // Fill chart with available data
     for(int i = 0; i < point_count && i < temp_data_count; i++)
     {
@@ -204,32 +226,67 @@ void refresh_climate_chart(void)
         }
     }
 
-    // Add legend - use NULL initialization each time to avoid stale pointers
-    lv_obj_t* internal_legend = NULL;
-    lv_obj_t* external_legend = NULL;
+    // Get chart content dimensions
+    lv_coord_t chart_w = lv_obj_get_content_width(chart);
+    lv_coord_t chart_h = lv_obj_get_content_height(chart);
 
-    // Only show legend for data that's valid
-    if(internal_data_valid)
+    // Calculate points for the data area
+    float x_start = 1;
+    float x_end   = chart_w - 1;
+
+    // Add max value lines and labels for valid series
+    if(internal_data_valid && internal_max_temp > -100.0f)
     {
-        internal_legend = lv_label_create(chart);
-        lv_obj_set_style_text_font(internal_legend, &lv_font_montserrat_12, 0);
-        lv_obj_set_style_text_color(internal_legend, lv_palette_main(LV_PALETTE_RED), 0);
+        // Calculate y position for internal max line
+        float internal_max_ratio = (internal_max_temp - y_min) / (y_max - y_min);
+        float internal_max_y_pos = chart_h - (internal_max_ratio * chart_h);
 
-        // Update the legend text
-        lv_label_set_text(internal_legend, "Internal");
-        lv_obj_align(internal_legend, LV_ALIGN_TOP_LEFT, 5, 5);
+        // Create max line for internal temperature
+        internal_max_line             = lv_line_create(chart);
+        internal_max_line_points[0].x = x_start;
+        internal_max_line_points[0].y = internal_max_y_pos;
+        internal_max_line_points[1].x = x_end;
+        internal_max_line_points[1].y = internal_max_y_pos;
+
+        lv_line_set_points(internal_max_line, internal_max_line_points, 2);
+        lv_obj_set_style_line_width(internal_max_line, 1, 0);
+        lv_obj_set_style_line_color(internal_max_line, lv_palette_main(LV_PALETTE_RED), 0);
+        lv_obj_set_style_line_dash_width(internal_max_line, 3, 0);
+        lv_obj_set_style_line_dash_gap(internal_max_line, 3, 0);
+
+        // Add max value label for internal temperature
+        internal_max_label = lv_label_create(chart);
+        lv_obj_set_style_text_font(internal_max_label, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(internal_max_label, lv_palette_main(LV_PALETTE_RED), 0);
+        lv_label_set_text_fmt(internal_max_label, "%.1f°C", internal_max_temp);
+        lv_obj_align(internal_max_label, LV_ALIGN_TOP_LEFT, 5, -8);
     }
 
-    if(external_data_valid)
+    if(external_data_valid && external_max_temp > -100.0f)
     {
-        external_legend = lv_label_create(chart);
-        lv_obj_set_style_text_font(external_legend, &lv_font_montserrat_12, 0);
-        lv_obj_set_style_text_color(external_legend, lv_palette_main(LV_PALETTE_BLUE), 0);
+        // Calculate y position for external max line
+        float external_max_ratio = (external_max_temp - y_min) / (y_max - y_min);
+        float external_max_y_pos = chart_h - (external_max_ratio * chart_h);
 
-        // Update the legend text
-        lv_label_set_text(external_legend, "External");
-        // Position differently depending on whether internal legend is present
-        lv_obj_align(external_legend, LV_ALIGN_TOP_LEFT, 5, internal_data_valid ? 25 : 5);
+        // Create max line for external temperature
+        external_max_line             = lv_line_create(chart);
+        external_max_line_points[0].x = x_start;
+        external_max_line_points[0].y = external_max_y_pos;
+        external_max_line_points[1].x = x_end;
+        external_max_line_points[1].y = external_max_y_pos;
+
+        lv_line_set_points(external_max_line, external_max_line_points, 2);
+        lv_obj_set_style_line_width(external_max_line, 1, 0);
+        lv_obj_set_style_line_color(external_max_line, lv_palette_main(LV_PALETTE_BLUE), 0);
+        lv_obj_set_style_line_dash_width(external_max_line, 3, 0);
+        lv_obj_set_style_line_dash_gap(external_max_line, 3, 0);
+
+        // Add max value label for external temperature
+        external_max_label = lv_label_create(chart);
+        lv_obj_set_style_text_font(external_max_label, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(external_max_label, lv_palette_main(LV_PALETTE_BLUE), 0);
+        lv_label_set_text_fmt(external_max_label, "%.1f°C", external_max_temp);
+        lv_obj_align(external_max_label, LV_ALIGN_TOP_RIGHT, -5, -8);
     }
 
     // Refresh the chart to show new data

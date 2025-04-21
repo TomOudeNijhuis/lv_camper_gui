@@ -1,5 +1,7 @@
 #include <stdbool.h>
 #include <math.h>
+#include <string.h>
+
 #include "lvgl/lvgl.h"
 #include "energy_temp_panel.h"
 #include "../lib/logger.h"
@@ -7,6 +9,7 @@
 #include "ui.h"
 #include "../main.h"
 #include "energy_temp_charts.h"
+#include "lv_awesome_16.h" // Added for icon symbols
 
 // Forward declarations for internal functions
 static void update_timer_cb(lv_timer_t* timer);
@@ -18,7 +21,8 @@ static lv_obj_t*   humidity_label       = NULL;
 static lv_obj_t*   power_label          = NULL;
 static lv_obj_t*   battery_status_label = NULL;
 static lv_obj_t*   solar_power_label    = NULL;
-static lv_obj_t*   solar_state_label    = NULL;
+static lv_obj_t*   solar_state_icon     = NULL;
+static lv_obj_t*   charging_icon        = NULL;
 static lv_timer_t* update_timer         = NULL;
 static lv_timer_t* update_long_timer    = NULL;
 
@@ -120,15 +124,72 @@ static void update_timer_cb(lv_timer_t* timer)
         }
     }
 
-    if(solar_state_label != NULL)
+    // Update the solar state icons based on charge state
+    if(solar_state_icon != NULL && charging_icon != NULL)
     {
         if(solar_data->valid)
         {
-            lv_label_set_text_fmt(solar_state_label, "%s", solar_data->charge_state);
+            // Set battery icon based on state of charge (example logic)
+            if(shunt_data->valid)
+            {
+                float soc = shunt_data->soc;
+                if(soc > 80.0f)
+                {
+                    lv_label_set_text(solar_state_icon, LV_SYMBOL_BATTERY_FULL);
+                }
+                else if(soc > 60.0f)
+                {
+                    lv_label_set_text(solar_state_icon, LV_SYMBOL_BATTERY_THREE_QUARTERS);
+                }
+                else if(soc > 40.0f)
+                {
+                    lv_label_set_text(solar_state_icon, LV_SYMBOL_BATTERY_HALF);
+                }
+                else if(soc > 20.0f)
+                {
+                    lv_label_set_text(solar_state_icon, LV_SYMBOL_BATTERY_QUARTER);
+                }
+                else
+                {
+                    lv_label_set_text(solar_state_icon, LV_SYMBOL_BATTERY_EMPTY);
+                }
+            }
+            else
+            {
+                lv_label_set_text(solar_state_icon, "---");
+            }
+
+            // Set charging icon based on charge state - using different arrow sizes
+            if(strcmp(solar_data->charge_state, "Bulk") == 0)
+            {
+                // Strongest charging - use regular arrow up
+                lv_label_set_text(charging_icon, LV_SYMBOL_ARROW_UP);
+                lv_obj_set_style_text_color(charging_icon, lv_color_hex(0xFF0000),
+                                            0); // Red for bulk charging
+            }
+            else if(strcmp(solar_data->charge_state, "Absorption") == 0)
+            {
+                // Medium charging - use square arrow
+                lv_label_set_text(charging_icon, LV_SYMBOL_ARROW_UP_SQUARE);
+                lv_obj_set_style_text_color(charging_icon, lv_color_hex(0xFFCC00),
+                                            0); // Yellow for absorption
+            }
+            else if(strcmp(solar_data->charge_state, "Float") == 0)
+            {
+                // Light charging - use thin arrow
+                lv_label_set_text(charging_icon, LV_SYMBOL_ARROW_UP_THIN);
+                lv_obj_set_style_text_color(charging_icon, lv_color_hex(0x00CC00),
+                                            0); // Green for float charging
+            }
+            else // Off or other state
+            {
+                lv_label_set_text(charging_icon, "");
+            }
         }
         else
         {
-            lv_label_set_text(solar_state_label, "---");
+            lv_label_set_text(solar_state_icon, "");
+            lv_label_set_text(charging_icon, "");
         }
     }
 }
@@ -328,14 +389,32 @@ void create_solar_container(lv_obj_t* right_column)
     lv_obj_set_scrollbar_mode(spacer, LV_SCROLLBAR_MODE_OFF);
     lv_obj_clear_flag(spacer, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Caption label
-    lv_obj_t* solar_state_caption = lv_label_create(power_column);
-    lv_label_set_text(solar_state_caption, "State");
+    // Caption label for state
+    // lv_obj_t* solar_state_caption = lv_label_create(power_column);
+    // lv_label_set_text(solar_state_caption, "State");
 
-    // Battery power value label
-    solar_state_label = lv_label_create(power_column);
-    lv_label_set_text(solar_state_label, "---");
-    lv_obj_set_style_text_font(solar_state_label, &lv_font_montserrat_20, 0);
+    // Create container for the icons
+    lv_obj_t* icon_container = lv_obj_create(power_column);
+    lv_obj_set_size(icon_container, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_opa(icon_container, LV_OPA_0, 0);
+    lv_obj_set_style_border_width(icon_container, 0, 0);
+    lv_obj_set_style_pad_all(icon_container, 0, 0);
+    lv_obj_set_flex_flow(icon_container, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(icon_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_scrollbar_mode(icon_container, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(icon_container, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Battery state icon
+    solar_state_icon = lv_label_create(icon_container);
+    lv_label_set_text(solar_state_icon, "");
+    lv_obj_set_style_text_font(solar_state_icon, &lv_awesome_16, 0);
+    lv_obj_set_style_text_font(solar_state_icon, &lv_awesome_16, 0);
+
+    // Charging icon
+    charging_icon = lv_label_create(icon_container);
+    lv_label_set_text(charging_icon, "");
+    lv_obj_set_style_text_font(charging_icon, &lv_awesome_16, 0);
 
     // Right column for hourly energy chart
     lv_obj_t* hourly_chart_container = lv_obj_create(solar_container);
@@ -395,7 +474,8 @@ void energy_temp_panel_cleanup(void)
     power_label          = NULL;
     battery_status_label = NULL;
     solar_power_label    = NULL;
-    solar_state_label    = NULL;
+    solar_state_icon     = NULL;
+    charging_icon        = NULL;
 
     chart_cleanup();
 
