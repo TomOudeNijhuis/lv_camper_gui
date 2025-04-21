@@ -56,6 +56,7 @@ extern "C"
      */
     typedef struct
     {
+        char   sensor_name[64]; // Added field to store the source sensor name
         char   entity_name[64];
         char   unit[16];
         bool   is_numeric;

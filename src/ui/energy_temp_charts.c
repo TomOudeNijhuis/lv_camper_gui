@@ -1,5 +1,7 @@
 #include <stdbool.h>
 #include <math.h>
+#include <string.h>
+
 #include "lvgl/lvgl.h"
 #include "energy_temp_panel.h"
 #include "../lib/logger.h"
@@ -51,14 +53,30 @@ static lv_obj_t*          external_max_label = NULL;
 static lv_point_precise_t internal_max_line_points[2];
 static lv_point_precise_t external_max_line_points[2];
 
+static lv_obj_t*          internal_min_line  = NULL;
+static lv_obj_t*          external_min_line  = NULL;
+static lv_obj_t*          internal_min_label = NULL;
+static lv_obj_t*          external_min_label = NULL;
+static lv_point_precise_t internal_min_line_points[2];
+static lv_point_precise_t external_min_line_points[2];
+
 // Split the update_climate_chart_with_history to handle one source at a time
 void update_climate_chart_with_history(entity_history_t* history_data, bool is_internal)
 {
-    if(chart == NULL || history_data == NULL || !history_data->valid)
+    if(chart == NULL || history_data == NULL || !history_data->valid || history_data->mean == NULL)
+    {
+        log_warning("Invalid climate chart data received, skipping update");
         return;
+    }
 
     // Store the data in our static arrays
     int data_count = history_data->count;
+    if(data_count <= 0)
+    {
+        log_warning("Empty climate chart data received, skipping update");
+        return;
+    }
+
     if(data_count > 48)
         data_count = 48;
 
@@ -70,7 +88,7 @@ void update_climate_chart_with_history(entity_history_t* history_data, bool is_i
             internal_temp_data[i] = history_data->mean[i];
         }
         internal_data_valid = true;
-        temp_data_count     = data_count;
+        temp_data_count     = data_count; // Update the count here
     }
     else
     {
@@ -79,11 +97,15 @@ void update_climate_chart_with_history(entity_history_t* history_data, bool is_i
             external_temp_data[i] = history_data->mean[i];
         }
         external_data_valid = true;
+        if(temp_data_count < data_count) // Only update if larger than current
+            temp_data_count = data_count;
     }
 
     // Refresh chart if at least one data source is valid
     if(internal_data_valid || external_data_valid)
     {
+        log_debug("Refreshing climate chart with internal=%d, external=%d, count=%d",
+                  internal_data_valid, external_data_valid, temp_data_count);
         refresh_climate_chart();
     }
 }
@@ -91,13 +113,46 @@ void update_climate_chart_with_history(entity_history_t* history_data, bool is_i
 // New function to render the chart with both data sets
 void refresh_climate_chart(void)
 {
-    // Only need one valid data source to show the chart
-    if(chart == NULL || (!internal_data_valid && !external_data_valid) || temp_data_count == 0)
+    // If both data sources are invalid, reset the chart completely
+    if(!internal_data_valid && !external_data_valid)
+    {
+        reset_climate_chart();
+        return;
+    }
+
+    // Continue with existing refresh logic if at least one source is valid
+    if(chart == NULL || temp_data_count == 0)
         return;
 
+    // Safety check - ensure temp_data_count is reasonable
+    if(temp_data_count > 48)
+    {
+        temp_data_count = 48;
+        log_warning("Temperature data count was too high, capped at 48");
+    }
+
     // Clear existing data
-    lv_chart_set_all_value(chart, internal_temp_series, LV_CHART_POINT_NONE);
-    lv_chart_set_all_value(chart, external_temp_series, LV_CHART_POINT_NONE);
+    if(internal_temp_series != NULL)
+        lv_chart_set_all_value(chart, internal_temp_series, LV_CHART_POINT_NONE);
+    if(external_temp_series != NULL)
+        lv_chart_set_all_value(chart, external_temp_series, LV_CHART_POINT_NONE);
+
+    // Ensure we have valid series
+    if(internal_temp_series == NULL || external_temp_series == NULL)
+    {
+        log_warning("Temperature series is NULL, recreating chart series");
+        // Recreate the series if they're NULL
+        if(internal_temp_series == NULL)
+        {
+            internal_temp_series = lv_chart_add_series(chart, lv_palette_main(LV_PALETTE_RED),
+                                                       LV_CHART_AXIS_PRIMARY_Y);
+        }
+        if(external_temp_series == NULL)
+        {
+            external_temp_series = lv_chart_add_series(chart, lv_palette_main(LV_PALETTE_BLUE),
+                                                       LV_CHART_AXIS_PRIMARY_Y);
+        }
+    }
 
     // Get the point count in the chart
     uint16_t point_count = lv_chart_get_point_count(chart);
@@ -110,6 +165,8 @@ void refresh_climate_chart(void)
     // Find min/max for each series
     float internal_max_temp = -100.0f;
     float external_max_temp = -100.0f;
+    float internal_min_temp = 100.0f;
+    float external_min_temp = 100.0f;
 
     // Consider internal temperature values if valid
     if(internal_data_valid)
@@ -122,6 +179,8 @@ void refresh_climate_chart(void)
                 max_temp_overall = internal_temp_data[i];
             if(internal_temp_data[i] > internal_max_temp)
                 internal_max_temp = internal_temp_data[i];
+            if(internal_temp_data[i] < internal_min_temp)
+                internal_min_temp = internal_temp_data[i];
         }
         range_set = true;
     }
@@ -137,6 +196,8 @@ void refresh_climate_chart(void)
                 max_temp_overall = external_temp_data[i];
             if(external_temp_data[i] > external_max_temp)
                 external_max_temp = external_temp_data[i];
+            if(external_temp_data[i] < external_min_temp)
+                external_min_temp = external_temp_data[i];
         }
         range_set = true;
     }
@@ -193,6 +254,10 @@ void refresh_climate_chart(void)
     external_max_line  = NULL;
     internal_max_label = NULL;
     external_max_label = NULL;
+    internal_min_line  = NULL;
+    external_min_line  = NULL;
+    internal_min_label = NULL;
+    external_min_label = NULL;
 
     // Fill chart with available data
     for(int i = 0; i < point_count && i < temp_data_count; i++)
@@ -289,6 +354,61 @@ void refresh_climate_chart(void)
         lv_obj_align(external_max_label, LV_ALIGN_TOP_RIGHT, -5, -8);
     }
 
+    // Add min value lines and labels for valid series
+    if(internal_data_valid && internal_min_temp < 100.0f)
+    {
+        // Calculate y position for internal min line
+        float internal_min_ratio = (internal_min_temp - y_min) / (y_max - y_min);
+        float internal_min_y_pos = chart_h - (internal_min_ratio * chart_h);
+
+        // Create min line for internal temperature
+        internal_min_line             = lv_line_create(chart);
+        internal_min_line_points[0].x = x_start;
+        internal_min_line_points[0].y = internal_min_y_pos;
+        internal_min_line_points[1].x = x_end;
+        internal_min_line_points[1].y = internal_min_y_pos;
+
+        lv_line_set_points(internal_min_line, internal_min_line_points, 2);
+        lv_obj_set_style_line_width(internal_min_line, 1, 0);
+        lv_obj_set_style_line_color(internal_min_line, lv_palette_main(LV_PALETTE_RED), 0);
+        lv_obj_set_style_line_dash_width(internal_min_line, 3, 0);
+        lv_obj_set_style_line_dash_gap(internal_min_line, 3, 0);
+
+        // Add min value label for internal temperature
+        internal_min_label = lv_label_create(chart);
+        lv_obj_set_style_text_font(internal_min_label, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(internal_min_label, lv_palette_main(LV_PALETTE_RED), 0);
+        lv_label_set_text_fmt(internal_min_label, "%.1f°C", internal_min_temp);
+        lv_obj_align(internal_min_label, LV_ALIGN_BOTTOM_LEFT, 5, 10);
+    }
+
+    if(external_data_valid && external_min_temp < 100.0f)
+    {
+        // Calculate y position for external min line
+        float external_min_ratio = (external_min_temp - y_min) / (y_max - y_min);
+        float external_min_y_pos = chart_h - (external_min_ratio * chart_h);
+
+        // Create min line for external temperature
+        external_min_line             = lv_line_create(chart);
+        external_min_line_points[0].x = x_start;
+        external_min_line_points[0].y = external_min_y_pos;
+        external_min_line_points[1].x = x_end;
+        external_min_line_points[1].y = external_min_y_pos;
+
+        lv_line_set_points(external_min_line, external_min_line_points, 2);
+        lv_obj_set_style_line_width(external_min_line, 1, 0);
+        lv_obj_set_style_line_color(external_min_line, lv_palette_main(LV_PALETTE_BLUE), 0);
+        lv_obj_set_style_line_dash_width(external_min_line, 3, 0);
+        lv_obj_set_style_line_dash_gap(external_min_line, 3, 0);
+
+        // Add min value label for external temperature
+        external_min_label = lv_label_create(chart);
+        lv_obj_set_style_text_font(external_min_label, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(external_min_label, lv_palette_main(LV_PALETTE_BLUE), 0);
+        lv_label_set_text_fmt(external_min_label, "%.1f°C", external_min_temp);
+        lv_obj_align(external_min_label, LV_ALIGN_BOTTOM_RIGHT, -5, 10);
+    }
+
     // Refresh the chart to show new data
     lv_chart_refresh(chart);
 
@@ -296,7 +416,6 @@ void refresh_climate_chart(void)
               temp_data_count, min_temp_overall, max_temp_overall);
 }
 
-// Split the fetch process into two separate functions
 bool fetch_internal_climate(void)
 {
     bool result = request_entity_history("inside", "temperature", "1h", 48);
@@ -330,14 +449,30 @@ bool update_internal_climate_chart(void)
 {
     // Check if historical data is available
     entity_history_t* history_data = get_entity_history_data();
-    if(history_data != NULL && history_data->valid)
+
+    // If data is NULL or invalid, clear internal data and refresh chart
+    if(history_data == NULL || !history_data->valid || history_data->mean == NULL ||
+       history_data->count <= 0 || history_data->sensor_name == NULL ||
+       history_data->sensor_name[0] == '\0')
     {
-        update_climate_chart_with_history(history_data, true);
-        free_entity_history_data(history_data);
-        return true;
+        internal_data_valid = false;
+        refresh_climate_chart();
+        if(history_data != NULL)
+            free_entity_history_data(history_data);
+        log_warning("Invalid internal temperature data received, clearing chart");
+        return false;
+    }
+    else if(strcmp(history_data->sensor_name, "inside") != 0)
+    {
+        log_warning("Invalid inside temperature data received, got '%s'",
+                    history_data->sensor_name);
+        return false;
     }
 
-    return false;
+    // Process valid data
+    update_climate_chart_with_history(history_data, true);
+    free_entity_history_data(history_data);
+    return true;
 }
 
 // Process external climate data
@@ -345,40 +480,75 @@ bool update_external_climate_chart(void)
 {
     // Check if historical data is available
     entity_history_t* history_data = get_entity_history_data();
-    if(history_data != NULL && history_data->valid)
-    {
-        update_climate_chart_with_history(history_data, false);
-        free_entity_history_data(history_data);
-        return true;
-    }
 
-    return false;
+    // If data is NULL or invalid, clear external data and refresh chart
+    if(history_data == NULL || !history_data->valid || history_data->mean == NULL ||
+       history_data->count <= 0 || history_data->sensor_name == NULL ||
+       history_data->sensor_name[0] == '\0')
+    {
+        external_data_valid = false;
+        refresh_climate_chart();
+        if(history_data != NULL)
+            free_entity_history_data(history_data);
+        log_warning("Invalid external temperature data received, clearing chart");
+        return false;
+    }
+    else if(strcmp(history_data->sensor_name, "outside") != 0)
+    {
+        log_warning("Invalid outside temperature data received, got '%s'",
+                    history_data->sensor_name);
+        return false;
+    }
+    // Process valid data
+    update_climate_chart_with_history(history_data, false);
+    free_entity_history_data(history_data);
+    return true;
 }
 
 // Reset the chart if data is invalid
 void reset_climate_chart(void)
 {
-    if(chart != NULL && internal_temp_series != NULL && external_temp_series != NULL)
-    {
+    if(chart == NULL)
+        return;
+
+    if(internal_temp_series != NULL)
         lv_chart_set_all_value(chart, internal_temp_series, LV_CHART_POINT_NONE);
+
+    if(external_temp_series != NULL)
         lv_chart_set_all_value(chart, external_temp_series, LV_CHART_POINT_NONE);
-        lv_chart_refresh(chart);
 
-        // Remove any labels if they exist
-        lv_obj_t* children = lv_obj_get_child(chart, 0);
-        while(children)
+    lv_chart_refresh(chart);
+
+    // Remove any labels and lines if they exist - safer approach
+    lv_obj_t* objects_to_delete[20] = {NULL}; // Increased size to handle all elements
+    int       delete_count          = 0;
+
+    uint32_t child_cnt = lv_obj_get_child_cnt(chart);
+    for(uint32_t i = 0; i < child_cnt && delete_count < 20; i++)
+    {
+        lv_obj_t* child = lv_obj_get_child(chart, i);
+        if(child &&
+           (lv_obj_check_type(child, &lv_label_class) || lv_obj_check_type(child, &lv_line_class)))
         {
-            if(lv_obj_check_type(children, &lv_label_class))
-            {
-                lv_obj_del(children);
-            }
-            children = lv_obj_get_child(chart, lv_obj_get_index(children) + 1);
+            objects_to_delete[delete_count++] = child;
         }
-
-        // Reset data validity flags
-        internal_data_valid = false;
-        external_data_valid = false;
     }
+
+    // Now safely delete the collected objects
+    for(int i = 0; i < delete_count; i++)
+    {
+        if(objects_to_delete[i])
+        {
+            lv_obj_del(objects_to_delete[i]);
+        }
+    }
+
+    // Reset data validity flags
+    internal_data_valid = false;
+    external_data_valid = false;
+    temp_data_count     = 0; // Also reset the data count!
+
+    log_debug("Climate chart reset completely");
 }
 
 bool update_energy_chart_with_history(entity_history_t* history_data)
@@ -523,32 +693,60 @@ bool update_energy_chart(void)
 {
     // Check if historical data is available
     entity_history_t* history_data = get_entity_history_data();
-    if(history_data != NULL && history_data->valid)
+    if(history_data == NULL)
+        return false;
+
+    bool success = false;
+
+    // Safely check sensor name
+    if(history_data->valid && history_data->sensor_name != NULL &&
+       history_data->sensor_name[0] != '\0' &&
+       strcmp(history_data->sensor_name, "SmartShunt") == 0 && history_data->max != NULL &&
+       history_data->count > 0)
     {
         update_energy_chart_with_history(history_data);
-        free_entity_history_data(history_data);
-        return true;
+        success = true;
     }
-
-    // Clear chart when data is invalid
-    if(energy_chart != NULL && hourly_energy_series != NULL)
+    else
     {
-        lv_chart_set_all_value(energy_chart, hourly_energy_series, LV_CHART_POINT_NONE);
-        lv_chart_refresh(energy_chart);
-
-        // Reset max value label if it exists
-        lv_obj_t* children = lv_obj_get_child(energy_chart, 0);
-        while(children)
+        // Clear chart when data is invalid
+        if(energy_chart != NULL && hourly_energy_series != NULL)
         {
-            if(lv_obj_check_type(children, &lv_label_class))
+            // Safely clear chart data
+            lv_chart_set_all_value(energy_chart, hourly_energy_series, LV_CHART_POINT_NONE);
+            lv_chart_refresh(energy_chart);
+
+            // Collect objects to delete in an array
+            // Include both labels AND lines
+            lv_obj_t* objects_to_delete[10] = {NULL};
+            int       delete_count          = 0;
+
+            uint32_t child_cnt = lv_obj_get_child_cnt(energy_chart);
+            for(uint32_t i = 0; i < child_cnt && delete_count < 10; i++)
             {
-                lv_obj_del(children);
+                lv_obj_t* child = lv_obj_get_child(energy_chart, i);
+                if(child && (lv_obj_check_type(child, &lv_label_class) ||
+                             lv_obj_check_type(child, &lv_line_class)))
+                {
+                    objects_to_delete[delete_count++] = child;
+                }
             }
-            children = lv_obj_get_child(energy_chart, lv_obj_get_index(children) + 1);
+            /*
+            // Now safely delete the collected objects
+            for(int i = 0; i < delete_count; i++)
+            {
+                if(objects_to_delete[i])
+                {
+                    lv_obj_del(objects_to_delete[i]);
+                }
+            }
+            */
+            log_debug("Energy chart cleared due to invalid data");
         }
     }
 
-    return false;
+    free_entity_history_data(history_data);
+    return success;
 }
 
 bool update_solar_chart_with_history(entity_history_t* history_data)
@@ -563,12 +761,20 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
         uint16_t point_count = lv_chart_get_point_count(solar_energy_chart);
         uint16_t data_count  = history_data->count;
 
+        // Safety check - ensure we have enough data points to calculate differences
+        if(data_count < 2)
+        {
+            log_warning("Not enough solar data points to calculate yield (%d points)", data_count);
+            return false;
+        }
+
         // Find the overall min and max yield values
         float hourly_yield[point_count];
         float prev_sample = history_data->max[0];
         float max_yield   = 0;
 
-        for(int i = 0; i < point_count && i < data_count; i++)
+        // Fix: Only iterate up to data_count-1 to prevent accessing beyond array bounds
+        for(int i = 0; i < point_count && i < data_count - 1; i++)
         {
             if(prev_sample > history_data->max[i + 1])
             {
@@ -696,22 +902,60 @@ bool update_solar_chart(void)
 {
     // Check if historical data is available
     entity_history_t* history_data = get_entity_history_data();
-    if((history_data != NULL) && (history_data->count > 0) && history_data->valid)
+    if(history_data == NULL)
+        return false;
+
+    bool success = false;
+
+    // Safely check sensor name (avoid segfault if strings are not properly initialized)
+    if(history_data->valid && history_data->count > 0 && history_data->sensor_name != NULL &&
+       history_data->sensor_name[0] != '\0' && history_data->max != NULL &&
+       strcmp(history_data->sensor_name, "SmartSolar") == 0)
     {
         update_solar_chart_with_history(history_data);
-        free_entity_history_data(history_data);
-
-        return true;
+        success = true;
     }
-
-    // Clear chart when data is invalid
-    if(solar_energy_chart != NULL && solar_hourly_energy_series != NULL)
+    else
     {
-        lv_chart_set_all_value(solar_energy_chart, solar_hourly_energy_series, LV_CHART_POINT_NONE);
-        lv_chart_refresh(solar_energy_chart);
+        // Clear chart when data is invalid - with improved null checks
+        if(solar_energy_chart != NULL && solar_hourly_energy_series != NULL)
+        {
+            // Safely clear chart data
+            lv_chart_set_all_value(solar_energy_chart, solar_hourly_energy_series,
+                                   LV_CHART_POINT_NONE);
+            lv_chart_refresh(solar_energy_chart);
+
+            // Collect objects to delete in an array - safer approach
+            // Include both labels AND lines
+            lv_obj_t* objects_to_delete[10] = {NULL}; // Increased array size to handle all elements
+            int       delete_count          = 0;
+
+            uint32_t child_cnt = lv_obj_get_child_cnt(solar_energy_chart);
+            for(uint32_t i = 0; i < child_cnt && delete_count < 10; i++)
+            {
+                lv_obj_t* child = lv_obj_get_child(solar_energy_chart, i);
+                if(child && (lv_obj_check_type(child, &lv_label_class) ||
+                             lv_obj_check_type(child, &lv_line_class)))
+                {
+                    objects_to_delete[delete_count++] = child;
+                }
+            }
+            /*
+            // Now safely delete the collected objects
+            for(int i = 0; i < delete_count; i++)
+            {
+                if(objects_to_delete[i])
+                {
+                    lv_obj_del(objects_to_delete[i]);
+                }
+            }
+            */
+            log_debug("Solar chart cleared due to invalid data");
+        }
     }
 
-    return false;
+    free_entity_history_data(history_data);
+    return success;
 }
 
 void update_long_timer_cb(lv_timer_t* timer)
@@ -720,11 +964,13 @@ void update_long_timer_cb(lv_timer_t* timer)
     bool       result         = false;
     static int fetch_interval = 0;
     static int fetch_valid    = 0;
+    static int fetch_attempts = 0; // Track consecutive fetch attempts
 
     if(ui_is_sleeping())
     {
         fetch_state    = 0;
         fetch_interval = 0;
+        fetch_attempts = 0;
         return;
     }
 
@@ -739,6 +985,8 @@ void update_long_timer_cb(lv_timer_t* timer)
         result = fetch_internal_climate();
         if(result)
             fetch_valid = 1;
+        else
+            fetch_attempts++;
 
         fetch_state = 1;
     }
@@ -747,6 +995,8 @@ void update_long_timer_cb(lv_timer_t* timer)
         result = update_internal_climate_chart();
         if(result)
             fetch_valid += 1;
+        else
+            fetch_attempts++;
 
         fetch_state = 2;
     }
@@ -755,6 +1005,8 @@ void update_long_timer_cb(lv_timer_t* timer)
         result = fetch_external_climate();
         if(result)
             fetch_valid += 1;
+        else
+            fetch_attempts++;
 
         fetch_state = 3;
     }
@@ -763,6 +1015,8 @@ void update_long_timer_cb(lv_timer_t* timer)
         result = update_external_climate_chart();
         if(result)
             fetch_valid += 1;
+        else
+            fetch_attempts++;
 
         fetch_state = 4;
     }
@@ -771,6 +1025,8 @@ void update_long_timer_cb(lv_timer_t* timer)
         result = fetch_solar();
         if(result)
             fetch_valid += 1;
+        else
+            fetch_attempts++;
 
         fetch_state = 5;
     }
@@ -779,6 +1035,8 @@ void update_long_timer_cb(lv_timer_t* timer)
         result = update_solar_chart();
         if(result)
             fetch_valid += 1;
+        else
+            fetch_attempts++;
 
         fetch_state = 6;
     }
@@ -787,6 +1045,8 @@ void update_long_timer_cb(lv_timer_t* timer)
         result = fetch_battery_consumption();
         if(result)
             fetch_valid += 1;
+        else
+            fetch_attempts++;
 
         fetch_state = 7;
     }
@@ -795,8 +1055,15 @@ void update_long_timer_cb(lv_timer_t* timer)
         result = update_energy_chart();
         if(result)
             fetch_valid += 1;
+        else
+            fetch_attempts++;
 
         fetch_state = 0;
+
+        // If we've had too many failed fetch attempts, reset the charts
+        if(fetch_attempts >= 3)
+            fetch_attempts = 0;
+
         fetch_valid = 0;
         if(fetch_valid >= 5)
             fetch_interval = 5;
@@ -834,6 +1101,11 @@ void initialize_temperature_chart(lv_obj_t* chart_container)
                                                LV_CHART_AXIS_PRIMARY_Y); // Internal temp in red
     external_temp_series = lv_chart_add_series(chart, lv_palette_main(LV_PALETTE_BLUE),
                                                LV_CHART_AXIS_PRIMARY_Y); // External temp in blue
+
+    // Initialize data validity flags
+    internal_data_valid = false;
+    external_data_valid = false;
+    temp_data_count     = 0;
 
     lv_chart_refresh(chart); // Required after direct set
 }
@@ -908,4 +1180,5 @@ void chart_cleanup()
     // Reset data validity flags
     internal_data_valid = false;
     external_data_valid = false;
+    temp_data_count     = 0; // Also reset the data count!
 }

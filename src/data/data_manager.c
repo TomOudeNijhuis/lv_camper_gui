@@ -95,7 +95,10 @@ int init_background_fetcher(void)
     camper.valid          = false;
     inside_climate.valid  = false;
     outside_climate.valid = false;
-    entity_history.valid  = false;
+
+    // Initialize entity_history completely to prevent segfaults
+    memset(&entity_history, 0, sizeof(entity_history_t));
+    entity_history.valid = false;
 
     worker_running    = true;
     fetch_requested   = false;
@@ -752,7 +755,12 @@ static int fetch_entity_history_data_internal(void)
     }
 
     // Parse the response
-    entity_history_t temp_history = {0};
+    entity_history_t temp_history = {0}; // Ensure zero-initialization
+
+    // Pre-set the sensor name in the temp structure before parsing
+    strncpy(temp_history.sensor_name, request.sensor_name, sizeof(temp_history.sensor_name) - 1);
+    temp_history.sensor_name[sizeof(temp_history.sensor_name) - 1] = '\0';
+
     if(parse_entity_history(response.body, &temp_history))
     {
         // Set valid flag
@@ -764,7 +772,7 @@ static int fetch_entity_history_data_internal(void)
         // Clear old data
         clear_entity_history(&entity_history);
 
-        // Copy new data
+        // Copy new data including sensor_name
         memcpy(&entity_history, &temp_history, sizeof(entity_history_t));
 
         pthread_mutex_unlock(&data_mutex);
@@ -892,20 +900,52 @@ camper_sensor_t* get_camper_data(void)
  */
 entity_history_t* get_entity_history_data(void)
 {
+    history_request_t request;
+
+    // Get a copy of the current request to verify the data matches
+    pthread_mutex_lock(&data_mutex);
+    memcpy(&request, &current_history_request, sizeof(history_request_t));
+
+    // Allocate memory for history copy
     entity_history_t* history_copy = (entity_history_t*)malloc(sizeof(entity_history_t));
     if(!history_copy)
     {
         log_error("Failed to allocate memory for history data copy");
+        pthread_mutex_unlock(&data_mutex);
         return NULL;
     }
 
-    pthread_mutex_lock(&data_mutex);
+    // Zero-initialize the history copy to prevent accessing garbage data
+    memset(history_copy, 0, sizeof(entity_history_t));
+
+    // First verify this is the data we're looking for, but only if entity_history is valid
+    if(entity_history.valid &&
+       (entity_history.sensor_name[0] != '\0') && // Make sure sensor_name is not empty
+       (strcmp(entity_history.sensor_name, request.sensor_name) != 0))
+    {
+        log_warning("Entity history mismatch: requested %s but have %s", request.sensor_name,
+                    entity_history.sensor_name);
+        // Mark as invalid since it's not the requested data
+        history_copy->valid = false;
+        pthread_mutex_unlock(&data_mutex);
+        return history_copy;
+    }
 
     // Copy basic fields
     history_copy->is_numeric = entity_history.is_numeric;
+    strncpy(history_copy->sensor_name, entity_history.sensor_name,
+            sizeof(history_copy->sensor_name) - 1);
+    history_copy->sensor_name[sizeof(history_copy->sensor_name) - 1] =
+        '\0'; // Ensure null termination
+
     strncpy(history_copy->entity_name, entity_history.entity_name,
-            sizeof(history_copy->entity_name));
-    strncpy(history_copy->unit, entity_history.unit, sizeof(history_copy->unit));
+            sizeof(history_copy->entity_name) - 1);
+    history_copy->entity_name[sizeof(history_copy->entity_name) - 1] =
+        '\0'; // Ensure null termination
+
+    strncpy(history_copy->unit, entity_history.unit, sizeof(history_copy->unit) - 1);
+    history_copy->unit[sizeof(history_copy->unit) - 1] = '\0'; // Ensure null termination
+
     history_copy->count = entity_history.count;
     history_copy->valid = entity_history.valid;
 
