@@ -74,7 +74,7 @@ static bool  dequeue_action(camper_action_t* action);
 
 static int fetch_data_internal(fetch_request_type_t request_type);
 static int fetch_camper_data_internal(void);
-static int fetch_inside_climate_data_internal(void);
+static int fetch_climate_data_internal(const char* location);
 static int fetch_smart_solar_data_internal(void);
 static int fetch_smart_shunt_data_internal(void);
 static int fetch_entity_history_data_internal(void);
@@ -410,7 +410,8 @@ static int fetch_data_internal(fetch_request_type_t request_type)
     switch(request_type)
     {
         case FETCH_CAMPER_DATA: return fetch_camper_data_internal();
-        case FETCH_CLIMATE_INSIDE: return fetch_inside_climate_data_internal();
+        case FETCH_CLIMATE_INSIDE: return fetch_climate_data_internal("inside");
+        case FETCH_CLIMATE_OUTSIDE: return fetch_climate_data_internal("outside");
         case FETCH_SMART_SOLAR: return fetch_smart_solar_data_internal();
         case FETCH_SMART_SHUNT: return fetch_smart_shunt_data_internal();
         case FETCH_ENTITY_HISTORY: return fetch_entity_history_data_internal();
@@ -519,16 +520,20 @@ static int fetch_camper_data_internal(void)
     return 0;
 }
 
-static int fetch_inside_climate_data_internal(void)
+/**
+ * Internal function to fetch climate data from the server and update local state
+ * @param location "inside" or "outside" to specify which climate sensor to fetch
+ */
+static int fetch_climate_data_internal(const char* location)
 {
     char api_url[MAX_URL_LENGTH];
-    snprintf(api_url, sizeof(api_url), "%s/sensors/inside/states/", API_BASE_URL);
+    snprintf(api_url, sizeof(api_url), "%s/sensors/%s/states/", API_BASE_URL, location);
 
     http_response_t response = http_get(api_url, HTTP_TIMEOUT_SECONDS);
 
     if(!response.success)
     {
-        log_error("Failed to fetch climate data: %s", response.error);
+        log_error("Failed to fetch %s climate data: %s", location, response.error);
         if(response.body && *response.body)
         {
             log_error("Response body: %s", response.body);
@@ -537,7 +542,14 @@ static int fetch_inside_climate_data_internal(void)
 
         // Mark data as invalid
         pthread_mutex_lock(&data_mutex);
-        inside_climate.valid = false;
+        if(strcmp(location, "inside") == 0)
+        {
+            inside_climate.valid = false;
+        }
+        else if(strcmp(location, "outside") == 0)
+        {
+            outside_climate.valid = false;
+        }
         pthread_mutex_unlock(&data_mutex);
 
         return -1;
@@ -550,25 +562,39 @@ static int fetch_inside_climate_data_internal(void)
         // Set valid flag
         temp_climate.valid = true;
 
-        // Update the actual data structure in a thread-safe manner
+        // Update the appropriate data structure in a thread-safe manner
         pthread_mutex_lock(&data_mutex);
-        memcpy(&inside_climate, &temp_climate, sizeof(climate_sensor_t));
+        if(strcmp(location, "inside") == 0)
+        {
+            memcpy(&inside_climate, &temp_climate, sizeof(climate_sensor_t));
+            log_debug("Inside climate data updated: temperature=%.2f, humidity=%.2f, battery=%.2f",
+                      inside_climate.temperature, inside_climate.humidity, inside_climate.battery);
+        }
+        else if(strcmp(location, "outside") == 0)
+        {
+            memcpy(&outside_climate, &temp_climate, sizeof(climate_sensor_t));
+            log_debug("Outside climate data updated: temperature=%.2f, humidity=%.2f, battery=%.2f",
+                      outside_climate.temperature, outside_climate.humidity,
+                      outside_climate.battery);
+        }
         pthread_mutex_unlock(&data_mutex);
-
-        // Debug output
-        log_debug("Inside climate data updated: temperature=%.2f, humidity=%.2f, battery=%.2f",
-                  inside_climate.temperature, inside_climate.humidity, inside_climate.battery);
     }
     else
     {
         // Mark data as invalid if parsing failed
         pthread_mutex_lock(&data_mutex);
-        inside_climate.valid = false;
+        if(strcmp(location, "inside") == 0)
+        {
+            inside_climate.valid = false;
+        }
+        else if(strcmp(location, "outside") == 0)
+        {
+            outside_climate.valid = false;
+        }
         pthread_mutex_unlock(&data_mutex);
     }
 
     http_response_free(&response);
-
     return 0;
 }
 

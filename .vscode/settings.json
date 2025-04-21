@@ -14,7 +14,8 @@
         "string_view": "c",
         "http_client.h": "c",
         "cstdlib": "c",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "stdbool.h": "c"
     },
     "editor.formatOnSave": true,
     "C_Cpp.clang_format_style": "file",

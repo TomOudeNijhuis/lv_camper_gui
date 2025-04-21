@@ -55,8 +55,8 @@ extern "C"
  ****************************************************************************/
 
 /* API endpoints */
-#define API_BASE_URL "http://localhost:8000"
-// #define API_BASE_URL "http://camperpi2.local:8000"
+// #define API_BASE_URL "http://localhost:8000"
+#define API_BASE_URL "http://camperpi2.local:8000"
 
 /* Network timeouts */
 #define HTTP_TIMEOUT_SECONDS 7 /* HTTP request timeout in seconds */
