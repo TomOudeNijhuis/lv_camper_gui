@@ -15,6 +15,7 @@
 
 // Forward declarations for internal functions
 static void update_timer_cb(lv_timer_t* timer);
+static void update_long_timer_cb(lv_timer_t* timer);
 
 // Static variables for UI elements
 static lv_obj_t*   internal_temp_label  = NULL;
@@ -196,7 +197,7 @@ static void update_timer_cb(lv_timer_t* timer)
     }
 }
 
-void update_long_timer_cb(lv_timer_t* timer)
+static void update_long_timer_cb(lv_timer_t* timer)
 {
     static int fetch_state    = 0;
     bool       result         = false;
