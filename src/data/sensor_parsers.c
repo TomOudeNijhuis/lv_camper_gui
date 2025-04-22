@@ -277,6 +277,7 @@ bool parse_climate_sensor(const char* json_str, climate_sensor_t* climate)
     {
         log_error("Climate sensor data must contain at least 3 fields");
         json_object_put(parsed_json);
+
         return false;
     }
 

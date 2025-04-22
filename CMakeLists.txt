@@ -58,7 +58,7 @@ endforeach()
 string(APPEND LVGL_PKG_CONFIG_LIB "-llvgl_linux")
 
 file(GLOB LV_LINUX_LIB_SRC src/lib/*.c)
-file(GLOB LV_LINUX_UI_SRC src/ui/*.c)
+file(GLOB_RECURSE LV_LINUX_UI_SRC src/ui/*.c)
 file(GLOB LV_LINUX_DATA_SRC src/data/*.c)
 set(LV_LINUX_INC src/lib)
 
