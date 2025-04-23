@@ -101,6 +101,13 @@ bool update_energy_chart_with_history(entity_history_t* history_data)
             energy_max_line = NULL;
         }
 
+        // Remove previous label if it exists
+        if(energy_max_label != NULL)
+        {
+            lv_obj_del(energy_max_label);
+            energy_max_label = NULL;
+        }
+
         // Get chart content dimensions and coordinates
         lv_coord_t chart_w = lv_obj_get_content_width(energy_chart);
         lv_coord_t chart_h = lv_obj_get_content_height(energy_chart);
@@ -111,6 +118,12 @@ bool update_energy_chart_with_history(entity_history_t* history_data)
 
         // Create new max line (position it exactly at max value)
         energy_max_line = lv_line_create(energy_chart);
+        if(energy_max_line == NULL)
+        {
+            log_error("Failed to create energy max line");
+            return false;
+        }
+
         float max_y_pos = chart_h - ((max_ah_change / range_max) * chart_h);
 
         energy_max_line_points[0].x = x_start;
@@ -125,12 +138,15 @@ bool update_energy_chart_with_history(entity_history_t* history_data)
         lv_obj_set_style_line_dash_gap(energy_max_line, 3, 0);
 
         // Add max value label
+        energy_max_label = lv_label_create(energy_chart);
         if(energy_max_label == NULL)
         {
-            energy_max_label = lv_label_create(energy_chart);
-            lv_obj_set_style_text_font(energy_max_label, &lv_font_montserrat_12, 0);
-            lv_obj_set_style_text_color(energy_max_label, lv_palette_main(LV_PALETTE_RED), 0);
+            log_error("Failed to create energy max label");
+            return false;
         }
+
+        lv_obj_set_style_text_font(energy_max_label, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(energy_max_label, lv_palette_main(LV_PALETTE_RED), 0);
 
         // Update the label text with actual max value
         lv_label_set_text_fmt(energy_max_label, "%.1f Ah", max_ah_change);
@@ -192,8 +208,7 @@ bool update_energy_chart(void)
        strcmp(history_data->sensor_name, "SmartShunt") == 0 && history_data->max != NULL &&
        history_data->count > 0)
     {
-        update_energy_chart_with_history(history_data);
-        success = true;
+        success = update_energy_chart_with_history(history_data);
     }
     else
     {
@@ -228,10 +243,23 @@ bool update_energy_chart(void)
 
 void battery_chart_cleanup(void)
 {
+    // Delete objects first before nullifying pointers
+    if(energy_max_line != NULL)
+    {
+        lv_obj_del(energy_max_line);
+        energy_max_line = NULL;
+    }
+
+    if(energy_max_label != NULL)
+    {
+        lv_obj_del(energy_max_label);
+        energy_max_label = NULL;
+    }
+
+    // Note: energy_chart and hourly_energy_series will be deleted
+    // by LVGL when their parent is deleted
     energy_chart         = NULL;
     hourly_energy_series = NULL;
-    energy_max_line      = NULL;
-    energy_max_label     = NULL;
 
     log_debug("Battery chart cleaned up");
 }

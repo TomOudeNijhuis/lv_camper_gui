@@ -102,6 +102,13 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
             solar_max_line = NULL;
         }
 
+        // Remove previous label if it exists
+        if(solar_max_label != NULL)
+        {
+            lv_obj_del(solar_max_label);
+            solar_max_label = NULL;
+        }
+
         // Get chart content dimensions and coordinates
         lv_coord_t chart_w = lv_obj_get_content_width(solar_energy_chart);
         lv_coord_t chart_h = lv_obj_get_content_height(solar_energy_chart);
@@ -111,7 +118,13 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
         float x_end   = chart_w - 1;
 
         // Create new max line (position it exactly at max value)
-        solar_max_line  = lv_line_create(solar_energy_chart);
+        solar_max_line = lv_line_create(solar_energy_chart);
+        if(solar_max_line == NULL)
+        {
+            log_error("Failed to create solar max line");
+            return false;
+        }
+
         float max_y_pos = chart_h - ((max_yield / range_max) * chart_h);
 
         solar_max_line_points[0].x = x_start;
@@ -126,12 +139,15 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
         lv_obj_set_style_line_dash_gap(solar_max_line, 3, 0);
 
         // Add max value label
+        solar_max_label = lv_label_create(solar_energy_chart);
         if(solar_max_label == NULL)
         {
-            solar_max_label = lv_label_create(solar_energy_chart);
-            lv_obj_set_style_text_font(solar_max_label, &lv_font_montserrat_12, 0);
-            lv_obj_set_style_text_color(solar_max_label, lv_palette_main(LV_PALETTE_GREEN), 0);
+            log_error("Failed to create solar max label");
+            return false;
         }
+
+        lv_obj_set_style_text_font(solar_max_label, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(solar_max_label, lv_palette_main(LV_PALETTE_GREEN), 0);
 
         // Update the label text with actual max value
         lv_label_set_text_fmt(solar_max_label, "%.1f Wh", max_yield);
@@ -199,8 +215,7 @@ bool update_solar_chart(void)
        history_data->sensor_name[0] != '\0' && history_data->max != NULL &&
        strcmp(history_data->sensor_name, "SmartSolar") == 0)
     {
-        update_solar_chart_with_history(history_data);
-        success = true;
+        success = update_solar_chart_with_history(history_data);
     }
     else
     {
@@ -236,10 +251,23 @@ bool update_solar_chart(void)
 
 void solar_chart_cleanup(void)
 {
+    // Delete objects first before nullifying pointers
+    if(solar_max_line != NULL)
+    {
+        lv_obj_del(solar_max_line);
+        solar_max_line = NULL;
+    }
+
+    if(solar_max_label != NULL)
+    {
+        lv_obj_del(solar_max_label);
+        solar_max_label = NULL;
+    }
+
+    // Note: solar_energy_chart and solar_hourly_energy_series will be deleted
+    // by LVGL when their parent is deleted
     solar_hourly_energy_series = NULL;
     solar_energy_chart         = NULL;
-    solar_max_line             = NULL;
-    solar_max_label            = NULL;
 
     log_debug("Solar chart cleaned up");
 }

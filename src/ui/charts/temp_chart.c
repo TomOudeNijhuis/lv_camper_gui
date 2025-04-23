@@ -74,8 +74,66 @@ void initialize_temperature_chart(lv_obj_t* chart_container)
     lv_chart_refresh(chart); // Required after direct set
 }
 
+// Add a new function to clean up all chart lines and labels
+static void cleanup_temperature_chart_lines_and_labels(void)
+{
+    // Delete max lines and labels
+    if(internal_max_line != NULL)
+    {
+        lv_obj_del(internal_max_line);
+        internal_max_line = NULL;
+    }
+
+    if(external_max_line != NULL)
+    {
+        lv_obj_del(external_max_line);
+        external_max_line = NULL;
+    }
+
+    if(internal_max_label != NULL)
+    {
+        lv_obj_del(internal_max_label);
+        internal_max_label = NULL;
+    }
+
+    if(external_max_label != NULL)
+    {
+        lv_obj_del(external_max_label);
+        external_max_label = NULL;
+    }
+
+    // Delete min lines and labels
+    if(internal_min_line != NULL)
+    {
+        lv_obj_del(internal_min_line);
+        internal_min_line = NULL;
+    }
+
+    if(external_min_line != NULL)
+    {
+        lv_obj_del(external_min_line);
+        external_min_line = NULL;
+    }
+
+    if(internal_min_label != NULL)
+    {
+        lv_obj_del(internal_min_label);
+        internal_min_label = NULL;
+    }
+
+    if(external_min_label != NULL)
+    {
+        lv_obj_del(external_min_label);
+        external_min_label = NULL;
+    }
+}
+
 void temp_chart_cleanup(void)
 {
+    // Use the dedicated cleanup function instead of repeating code
+    cleanup_temperature_chart_lines_and_labels();
+
+    // Note: chart and series will be deleted by LVGL when their parent is deleted
     chart                = NULL;
     internal_temp_series = NULL;
     external_temp_series = NULL;
@@ -249,47 +307,8 @@ void refresh_climate_chart(void)
     lv_chart_set_range(chart, LV_CHART_AXIS_PRIMARY_Y, (int16_t)(y_min * 10),
                        (int16_t)(y_max * 10));
 
-    // Delete min/max lines and labels if they exist
-    if(internal_max_line)
-    {
-        lv_obj_del(internal_max_line);
-        internal_max_line = NULL;
-    }
-    if(external_max_line)
-    {
-        lv_obj_del(external_max_line);
-        external_max_line = NULL;
-    }
-    if(internal_max_label)
-    {
-        lv_obj_del(internal_max_label);
-        internal_max_label = NULL;
-    }
-    if(external_max_label)
-    {
-        lv_obj_del(external_max_label);
-        external_max_label = NULL;
-    }
-    if(internal_min_line)
-    {
-        lv_obj_del(internal_min_line);
-        internal_min_line = NULL;
-    }
-    if(external_min_line)
-    {
-        lv_obj_del(external_min_line);
-        external_min_line = NULL;
-    }
-    if(internal_min_label)
-    {
-        lv_obj_del(internal_min_label);
-        internal_min_label = NULL;
-    }
-    if(external_min_label)
-    {
-        lv_obj_del(external_min_label);
-        external_min_label = NULL;
-    }
+    // Use the dedicated function to clean up all lines and labels
+    cleanup_temperature_chart_lines_and_labels();
 
     // Fill chart with available data
     for(int i = 0; i < point_count && i < temp_data_count; i++)
@@ -339,7 +358,13 @@ void refresh_climate_chart(void)
         float internal_max_y_pos = chart_h - (internal_max_ratio * chart_h);
 
         // Create max line for internal temperature
-        internal_max_line             = lv_line_create(chart);
+        internal_max_line = lv_line_create(chart);
+        if(internal_max_line == NULL)
+        {
+            log_error("Failed to create internal max line");
+            return;
+        }
+
         internal_max_line_points[0].x = x_start;
         internal_max_line_points[0].y = internal_max_y_pos;
         internal_max_line_points[1].x = x_end;
@@ -353,6 +378,12 @@ void refresh_climate_chart(void)
 
         // Add max value label for internal temperature
         internal_max_label = lv_label_create(chart);
+        if(internal_max_label == NULL)
+        {
+            log_error("Failed to create internal max label");
+            return;
+        }
+
         lv_obj_set_style_text_font(internal_max_label, &lv_font_montserrat_12, 0);
         lv_obj_set_style_text_color(internal_max_label, lv_palette_main(LV_PALETTE_RED), 0);
         lv_label_set_text_fmt(internal_max_label, "%.1f°C", internal_max_temp);
@@ -366,7 +397,13 @@ void refresh_climate_chart(void)
         float external_max_y_pos = chart_h - (external_max_ratio * chart_h);
 
         // Create max line for external temperature
-        external_max_line             = lv_line_create(chart);
+        external_max_line = lv_line_create(chart);
+        if(external_max_line == NULL)
+        {
+            log_error("Failed to create external max line");
+            return;
+        }
+
         external_max_line_points[0].x = x_start;
         external_max_line_points[0].y = external_max_y_pos;
         external_max_line_points[1].x = x_end;
@@ -380,6 +417,12 @@ void refresh_climate_chart(void)
 
         // Add max value label for external temperature
         external_max_label = lv_label_create(chart);
+        if(external_max_label == NULL)
+        {
+            log_error("Failed to create external max label");
+            return;
+        }
+
         lv_obj_set_style_text_font(external_max_label, &lv_font_montserrat_12, 0);
         lv_obj_set_style_text_color(external_max_label, lv_palette_main(LV_PALETTE_BLUE), 0);
         lv_label_set_text_fmt(external_max_label, "%.1f°C", external_max_temp);
@@ -394,7 +437,13 @@ void refresh_climate_chart(void)
         float internal_min_y_pos = chart_h - (internal_min_ratio * chart_h);
 
         // Create min line for internal temperature
-        internal_min_line             = lv_line_create(chart);
+        internal_min_line = lv_line_create(chart);
+        if(internal_min_line == NULL)
+        {
+            log_error("Failed to create internal min line");
+            return;
+        }
+
         internal_min_line_points[0].x = x_start;
         internal_min_line_points[0].y = internal_min_y_pos;
         internal_min_line_points[1].x = x_end;
@@ -408,6 +457,12 @@ void refresh_climate_chart(void)
 
         // Add min value label for internal temperature
         internal_min_label = lv_label_create(chart);
+        if(internal_min_label == NULL)
+        {
+            log_error("Failed to create internal min label");
+            return;
+        }
+
         lv_obj_set_style_text_font(internal_min_label, &lv_font_montserrat_12, 0);
         lv_obj_set_style_text_color(internal_min_label, lv_palette_main(LV_PALETTE_RED), 0);
         lv_label_set_text_fmt(internal_min_label, "%.1f°C", internal_min_temp);
@@ -421,7 +476,13 @@ void refresh_climate_chart(void)
         float external_min_y_pos = chart_h - (external_min_ratio * chart_h);
 
         // Create min line for external temperature
-        external_min_line             = lv_line_create(chart);
+        external_min_line = lv_line_create(chart);
+        if(external_min_line == NULL)
+        {
+            log_error("Failed to create external min line");
+            return;
+        }
+
         external_min_line_points[0].x = x_start;
         external_min_line_points[0].y = external_min_y_pos;
         external_min_line_points[1].x = x_end;
@@ -435,6 +496,12 @@ void refresh_climate_chart(void)
 
         // Add min value label for external temperature
         external_min_label = lv_label_create(chart);
+        if(external_min_label == NULL)
+        {
+            log_error("Failed to create external min label");
+            return;
+        }
+
         lv_obj_set_style_text_font(external_min_label, &lv_font_montserrat_12, 0);
         lv_obj_set_style_text_color(external_min_label, lv_palette_main(LV_PALETTE_BLUE), 0);
         lv_label_set_text_fmt(external_min_label, "%.1f°C", external_min_temp);
@@ -551,29 +618,8 @@ void reset_climate_chart(void)
 
     lv_chart_refresh(chart);
 
-    // Remove any labels and lines if they exist - safer approach
-    lv_obj_t* objects_to_delete[20] = {NULL}; // Increased size to handle all elements
-    int       delete_count          = 0;
-
-    uint32_t child_cnt = lv_obj_get_child_cnt(chart);
-    for(uint32_t i = 0; i < child_cnt && delete_count < 20; i++)
-    {
-        lv_obj_t* child = lv_obj_get_child(chart, i);
-        if(child &&
-           (lv_obj_check_type(child, &lv_label_class) || lv_obj_check_type(child, &lv_line_class)))
-        {
-            objects_to_delete[delete_count++] = child;
-        }
-    }
-
-    // Now safely delete the collected objects
-    for(int i = 0; i < delete_count; i++)
-    {
-        if(objects_to_delete[i])
-        {
-            lv_obj_del(objects_to_delete[i]);
-        }
-    }
+    // Use the dedicated cleanup function for lines and labels
+    cleanup_temperature_chart_lines_and_labels();
 
     // Reset data validity flags
     internal_data_valid = false;
