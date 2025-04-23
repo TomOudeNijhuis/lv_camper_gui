@@ -218,9 +218,6 @@ void update_climate_chart_with_history(entity_history_t* history_data, bool is_i
         return;
     }
 
-    if(data_count > 48)
-        data_count = 48;
-
     // Copy mean values to appropriate array
     if(is_internal)
     {
@@ -229,7 +226,7 @@ void update_climate_chart_with_history(entity_history_t* history_data, bool is_i
             internal_temp_data[i] = history_data->mean[i];
         }
         internal_data_valid = true;
-        temp_data_count     = data_count; // Update the count here
+        temp_data_count     = data_count;
     }
     else
     {
@@ -238,7 +235,7 @@ void update_climate_chart_with_history(entity_history_t* history_data, bool is_i
             external_temp_data[i] = history_data->mean[i];
         }
         external_data_valid = true;
-        if(temp_data_count < data_count) // Only update if larger than current
+        if(temp_data_count < data_count)
             temp_data_count = data_count;
     }
 
@@ -556,7 +553,7 @@ void reset_climate_chart(void)
     // Reset data validity flags
     internal_data_valid = false;
     external_data_valid = false;
-    temp_data_count     = 0; // Also reset the data count!
+    temp_data_count     = 0;
 
     log_debug("Climate chart reset completely");
 }

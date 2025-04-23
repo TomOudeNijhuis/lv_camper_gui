@@ -40,7 +40,7 @@ typedef enum
 /**
  * Timer callback to update energy and temperature data
  */
-static void update_timer_cb(lv_timer_t* timer)
+static void update_camper_timer_cb(lv_timer_t* timer)
 {
     bool result = request_data_fetch(FETCH_CLIMATE_INSIDE);
     if(!result)
@@ -521,7 +521,7 @@ void create_energy_temp_panel(lv_obj_t* right_column)
     create_solar_container(right_column);
 
     // Create a timer to update the values periodically
-    update_timer      = lv_timer_create(update_timer_cb, DATA_UPDATE_INTERVAL_MS, NULL);
+    update_timer = lv_timer_create(update_camper_timer_cb, DATA_OTHER_UPDATE_INTERVAL_MS, NULL);
     update_long_timer = lv_timer_create(update_long_timer_cb, DATA_CHART_UPDATE_INTERVAL_MS, NULL);
     log_info("Energy and temperature panel created");
 }

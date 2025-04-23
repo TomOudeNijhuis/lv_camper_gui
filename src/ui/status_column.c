@@ -427,7 +427,7 @@ void create_status_column(lv_obj_t* left_column)
     lv_obj_t* wifi_container = create_wifi_status(left_column);
     lv_obj_set_style_margin_top(wifi_container, 0, 0); // Ensure no extra margin
 
-    update_timer = lv_timer_create(data_update_timer_cb, DATA_UPDATE_INTERVAL_MS, NULL);
+    update_timer = lv_timer_create(data_update_timer_cb, DATA_CAMPER_UPDATE_INTERVAL_MS, NULL);
 
     // Initialize Wi-Fi monitoring
     wifi_init();
