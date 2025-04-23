@@ -18,6 +18,74 @@ static lv_obj_t*          energy_max_line  = NULL;
 static lv_obj_t*          energy_max_label = NULL;
 static lv_point_precise_t energy_max_line_points[2];
 
+// Add a new function to clean up all chart lines and labels
+static void cleanup_energy_chart_lines_and_labels(void)
+{
+    if(energy_max_line != NULL)
+    {
+        lv_obj_del(energy_max_line);
+        energy_max_line = NULL;
+    }
+
+    if(energy_max_label != NULL)
+    {
+        lv_obj_del(energy_max_label);
+        energy_max_label = NULL;
+    }
+}
+
+// Add a function to safely create a line with error handling
+static lv_obj_t* create_energy_line(lv_obj_t* parent, const char* line_name, lv_color_t color,
+                                    lv_point_precise_t* points)
+{
+    if(parent == NULL || points == NULL)
+    {
+        log_error("Cannot create %s: Invalid parent or points", line_name);
+        return NULL;
+    }
+
+    lv_obj_t* line = lv_line_create(parent);
+    if(line == NULL)
+    {
+        log_error("Failed to create %s", line_name);
+        return NULL;
+    }
+
+    lv_line_set_points(line, points, 2);
+    lv_obj_set_style_line_width(line, 1, 0);
+    lv_obj_set_style_line_color(line, color, 0);
+    lv_obj_set_style_line_dash_width(line, 3, 0);
+    lv_obj_set_style_line_dash_gap(line, 3, 0);
+
+    return line;
+}
+
+// Add a function to safely create a label with error handling
+static lv_obj_t* create_energy_label(lv_obj_t* parent, const char* label_name, lv_color_t color,
+                                     float value, lv_align_t alignment, lv_coord_t x_offset,
+                                     lv_coord_t y_offset)
+{
+    if(parent == NULL)
+    {
+        log_error("Cannot create %s: Invalid parent", label_name);
+        return NULL;
+    }
+
+    lv_obj_t* label = lv_label_create(parent);
+    if(label == NULL)
+    {
+        log_error("Failed to create %s", label_name);
+        return NULL;
+    }
+
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(label, color, 0);
+    lv_label_set_text_fmt(label, "%.1f Ah", value);
+    lv_obj_align(label, alignment, x_offset, y_offset);
+
+    return label;
+}
+
 void initialize_energy_chart(lv_obj_t* chart_container)
 {
     // Create a chart for hourly energy
@@ -94,19 +162,8 @@ bool update_energy_chart_with_history(entity_history_t* history_data)
         // Update the chart's Y-axis range (0 to max, since we're showing consumed Ah)
         lv_chart_set_range(energy_chart, LV_CHART_AXIS_PRIMARY_Y, 0, range_max * 10);
 
-        // Remove previous line if it exists
-        if(energy_max_line != NULL)
-        {
-            lv_obj_del(energy_max_line);
-            energy_max_line = NULL;
-        }
-
-        // Remove previous label if it exists
-        if(energy_max_label != NULL)
-        {
-            lv_obj_del(energy_max_label);
-            energy_max_label = NULL;
-        }
+        // Use the dedicated function to clean up all lines and labels
+        cleanup_energy_chart_lines_and_labels();
 
         // Get chart content dimensions and coordinates
         lv_coord_t chart_w = lv_obj_get_content_width(energy_chart);
@@ -116,14 +173,7 @@ bool update_energy_chart_with_history(entity_history_t* history_data)
         float x_start = 1;
         float x_end   = chart_w - 1;
 
-        // Create new max line (position it exactly at max value)
-        energy_max_line = lv_line_create(energy_chart);
-        if(energy_max_line == NULL)
-        {
-            log_error("Failed to create energy max line");
-            return false;
-        }
-
+        // Create new max line using helper function
         float max_y_pos = chart_h - ((max_ah_change / range_max) * chart_h);
 
         energy_max_line_points[0].x = x_start;
@@ -131,26 +181,22 @@ bool update_energy_chart_with_history(entity_history_t* history_data)
         energy_max_line_points[1].x = x_end;
         energy_max_line_points[1].y = max_y_pos;
 
-        lv_line_set_points(energy_max_line, energy_max_line_points, 2);
-        lv_obj_set_style_line_width(energy_max_line, 1, 0);
-        lv_obj_set_style_line_color(energy_max_line, lv_palette_main(LV_PALETTE_RED), 0);
-        lv_obj_set_style_line_dash_width(energy_max_line, 3, 0);
-        lv_obj_set_style_line_dash_gap(energy_max_line, 3, 0);
-
-        // Add max value label
-        energy_max_label = lv_label_create(energy_chart);
-        if(energy_max_label == NULL)
+        energy_max_line =
+            create_energy_line(energy_chart, "energy max line", lv_palette_main(LV_PALETTE_RED),
+                               energy_max_line_points);
+        if(energy_max_line == NULL)
         {
-            log_error("Failed to create energy max label");
             return false;
         }
 
-        lv_obj_set_style_text_font(energy_max_label, &lv_font_montserrat_12, 0);
-        lv_obj_set_style_text_color(energy_max_label, lv_palette_main(LV_PALETTE_RED), 0);
-
-        // Update the label text with actual max value
-        lv_label_set_text_fmt(energy_max_label, "%.1f Ah", max_ah_change);
-        lv_obj_align(energy_max_label, LV_ALIGN_TOP_LEFT, 5, -8);
+        // Add max value label using helper function
+        energy_max_label =
+            create_energy_label(energy_chart, "energy max label", lv_palette_main(LV_PALETTE_RED),
+                                max_ah_change, LV_ALIGN_TOP_LEFT, 5, -8);
+        if(energy_max_label == NULL)
+        {
+            return false;
+        }
 
         // Fill chart with calculated Ah data
         for(int i = 0; i < point_count && i < data_count - 1; i++)
@@ -219,19 +265,8 @@ bool update_energy_chart(void)
             lv_chart_set_all_value(energy_chart, hourly_energy_series, LV_CHART_POINT_NONE);
             lv_chart_refresh(energy_chart);
 
-            // Delete max line if it exists
-            if(energy_max_line != NULL)
-            {
-                lv_obj_del(energy_max_line);
-                energy_max_line = NULL;
-            }
-
-            // Delete max label if it exists
-            if(energy_max_label != NULL)
-            {
-                lv_obj_del(energy_max_label);
-                energy_max_label = NULL;
-            }
+            // Use the dedicated cleanup function instead of repeating code
+            cleanup_energy_chart_lines_and_labels();
 
             log_debug("Energy chart cleared due to invalid data");
         }
@@ -243,21 +278,10 @@ bool update_energy_chart(void)
 
 void battery_chart_cleanup(void)
 {
-    // Delete objects first before nullifying pointers
-    if(energy_max_line != NULL)
-    {
-        lv_obj_del(energy_max_line);
-        energy_max_line = NULL;
-    }
+    // Use the dedicated cleanup function instead of repeating code
+    cleanup_energy_chart_lines_and_labels();
 
-    if(energy_max_label != NULL)
-    {
-        lv_obj_del(energy_max_label);
-        energy_max_label = NULL;
-    }
-
-    // Note: energy_chart and hourly_energy_series will be deleted
-    // by LVGL when their parent is deleted
+    // Note: chart and series will be deleted by LVGL when their parent is deleted
     energy_chart         = NULL;
     hourly_energy_series = NULL;
 

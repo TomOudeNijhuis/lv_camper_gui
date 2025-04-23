@@ -61,7 +61,7 @@ void initialize_temperature_chart(lv_obj_t* chart_container)
     lv_chart_set_point_count(chart, 48); // 48 data points (hourly for past 48 hours)
 
     // Add data series for internal and external temperatures
-    internal_temp_series = lv_chart_add_series(chart, lv_palette_main(LV_PALETTE_RED),
+    internal_temp_series = lv_chart_add_series(chart, lv_palette_main(LV_PALETTE_GREEN),
                                                LV_CHART_AXIS_PRIMARY_Y); // Internal temp in red
     external_temp_series = lv_chart_add_series(chart, lv_palette_main(LV_PALETTE_BLUE),
                                                LV_CHART_AXIS_PRIMARY_Y); // External temp in blue
@@ -126,6 +126,58 @@ static void cleanup_temperature_chart_lines_and_labels(void)
         lv_obj_del(external_min_label);
         external_min_label = NULL;
     }
+}
+
+// Add a function to safely create a line with error handling
+static lv_obj_t* create_temperature_line(lv_obj_t* parent, const char* line_name, lv_color_t color,
+                                         lv_point_precise_t* points)
+{
+    if(parent == NULL || points == NULL)
+    {
+        log_error("Cannot create %s: Invalid parent or points", line_name);
+        return NULL;
+    }
+
+    lv_obj_t* line = lv_line_create(parent);
+    if(line == NULL)
+    {
+        log_error("Failed to create %s", line_name);
+        return NULL;
+    }
+
+    lv_line_set_points(line, points, 2);
+    lv_obj_set_style_line_width(line, 1, 0);
+    lv_obj_set_style_line_color(line, color, 0);
+    lv_obj_set_style_line_dash_width(line, 3, 0);
+    lv_obj_set_style_line_dash_gap(line, 3, 0);
+
+    return line;
+}
+
+// Add a function to safely create a temperature label with error handling
+static lv_obj_t* create_temperature_label(lv_obj_t* parent, const char* label_name,
+                                          lv_color_t color, float temperature, lv_align_t alignment,
+                                          lv_coord_t x_offset, lv_coord_t y_offset)
+{
+    if(parent == NULL)
+    {
+        log_error("Cannot create %s: Invalid parent", label_name);
+        return NULL;
+    }
+
+    lv_obj_t* label = lv_label_create(parent);
+    if(label == NULL)
+    {
+        log_error("Failed to create %s", label_name);
+        return NULL;
+    }
+
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(label, color, 0);
+    lv_label_set_text_fmt(label, "%.1f°C", temperature);
+    lv_obj_align(label, alignment, x_offset, y_offset);
+
+    return label;
 }
 
 void temp_chart_cleanup(void)
@@ -230,7 +282,7 @@ void refresh_climate_chart(void)
         // Recreate the series if they're NULL
         if(internal_temp_series == NULL)
         {
-            internal_temp_series = lv_chart_add_series(chart, lv_palette_main(LV_PALETTE_RED),
+            internal_temp_series = lv_chart_add_series(chart, lv_palette_main(LV_PALETTE_GREEN),
                                                        LV_CHART_AXIS_PRIMARY_Y);
         }
         if(external_temp_series == NULL)
@@ -357,37 +409,29 @@ void refresh_climate_chart(void)
         float internal_max_ratio = (internal_max_temp - y_min) / (y_max - y_min);
         float internal_max_y_pos = chart_h - (internal_max_ratio * chart_h);
 
-        // Create max line for internal temperature
-        internal_max_line = lv_line_create(chart);
-        if(internal_max_line == NULL)
-        {
-            log_error("Failed to create internal max line");
-            return;
-        }
-
+        // Setup line points
         internal_max_line_points[0].x = x_start;
         internal_max_line_points[0].y = internal_max_y_pos;
         internal_max_line_points[1].x = x_end;
         internal_max_line_points[1].y = internal_max_y_pos;
 
-        lv_line_set_points(internal_max_line, internal_max_line_points, 2);
-        lv_obj_set_style_line_width(internal_max_line, 1, 0);
-        lv_obj_set_style_line_color(internal_max_line, lv_palette_main(LV_PALETTE_RED), 0);
-        lv_obj_set_style_line_dash_width(internal_max_line, 3, 0);
-        lv_obj_set_style_line_dash_gap(internal_max_line, 3, 0);
-
-        // Add max value label for internal temperature
-        internal_max_label = lv_label_create(chart);
-        if(internal_max_label == NULL)
+        // Create max line for internal temperature using helper function
+        internal_max_line =
+            create_temperature_line(chart, "internal max line", lv_palette_main(LV_PALETTE_GREEN),
+                                    internal_max_line_points);
+        if(internal_max_line == NULL)
         {
-            log_error("Failed to create internal max label");
             return;
         }
 
-        lv_obj_set_style_text_font(internal_max_label, &lv_font_montserrat_12, 0);
-        lv_obj_set_style_text_color(internal_max_label, lv_palette_main(LV_PALETTE_RED), 0);
-        lv_label_set_text_fmt(internal_max_label, "%.1f°C", internal_max_temp);
-        lv_obj_align(internal_max_label, LV_ALIGN_TOP_LEFT, 5, -8);
+        // Add max value label for internal temperature using helper function
+        internal_max_label =
+            create_temperature_label(chart, "internal max label", lv_palette_main(LV_PALETTE_GREEN),
+                                     internal_max_temp, LV_ALIGN_TOP_LEFT, 5, -8);
+        if(internal_max_label == NULL)
+        {
+            return;
+        }
     }
 
     if(external_data_valid && external_max_temp > -100.0f)
@@ -396,37 +440,28 @@ void refresh_climate_chart(void)
         float external_max_ratio = (external_max_temp - y_min) / (y_max - y_min);
         float external_max_y_pos = chart_h - (external_max_ratio * chart_h);
 
-        // Create max line for external temperature
-        external_max_line = lv_line_create(chart);
-        if(external_max_line == NULL)
-        {
-            log_error("Failed to create external max line");
-            return;
-        }
-
+        // Setup line points
         external_max_line_points[0].x = x_start;
         external_max_line_points[0].y = external_max_y_pos;
         external_max_line_points[1].x = x_end;
         external_max_line_points[1].y = external_max_y_pos;
 
-        lv_line_set_points(external_max_line, external_max_line_points, 2);
-        lv_obj_set_style_line_width(external_max_line, 1, 0);
-        lv_obj_set_style_line_color(external_max_line, lv_palette_main(LV_PALETTE_BLUE), 0);
-        lv_obj_set_style_line_dash_width(external_max_line, 3, 0);
-        lv_obj_set_style_line_dash_gap(external_max_line, 3, 0);
-
-        // Add max value label for external temperature
-        external_max_label = lv_label_create(chart);
-        if(external_max_label == NULL)
+        // Create max line for external temperature using helper function
+        external_max_line = create_temperature_line(
+            chart, "external max line", lv_palette_main(LV_PALETTE_BLUE), external_max_line_points);
+        if(external_max_line == NULL)
         {
-            log_error("Failed to create external max label");
             return;
         }
 
-        lv_obj_set_style_text_font(external_max_label, &lv_font_montserrat_12, 0);
-        lv_obj_set_style_text_color(external_max_label, lv_palette_main(LV_PALETTE_BLUE), 0);
-        lv_label_set_text_fmt(external_max_label, "%.1f°C", external_max_temp);
-        lv_obj_align(external_max_label, LV_ALIGN_TOP_RIGHT, -5, -8);
+        // Add max value label for external temperature using helper function
+        external_max_label =
+            create_temperature_label(chart, "external max label", lv_palette_main(LV_PALETTE_BLUE),
+                                     external_max_temp, LV_ALIGN_TOP_RIGHT, -5, -8);
+        if(external_max_label == NULL)
+        {
+            return;
+        }
     }
 
     // Add min value lines and labels for valid series
@@ -436,37 +471,29 @@ void refresh_climate_chart(void)
         float internal_min_ratio = (internal_min_temp - y_min) / (y_max - y_min);
         float internal_min_y_pos = chart_h - (internal_min_ratio * chart_h);
 
-        // Create min line for internal temperature
-        internal_min_line = lv_line_create(chart);
-        if(internal_min_line == NULL)
-        {
-            log_error("Failed to create internal min line");
-            return;
-        }
-
+        // Setup line points
         internal_min_line_points[0].x = x_start;
         internal_min_line_points[0].y = internal_min_y_pos;
         internal_min_line_points[1].x = x_end;
         internal_min_line_points[1].y = internal_min_y_pos;
 
-        lv_line_set_points(internal_min_line, internal_min_line_points, 2);
-        lv_obj_set_style_line_width(internal_min_line, 1, 0);
-        lv_obj_set_style_line_color(internal_min_line, lv_palette_main(LV_PALETTE_RED), 0);
-        lv_obj_set_style_line_dash_width(internal_min_line, 3, 0);
-        lv_obj_set_style_line_dash_gap(internal_min_line, 3, 0);
-
-        // Add min value label for internal temperature
-        internal_min_label = lv_label_create(chart);
-        if(internal_min_label == NULL)
+        // Create min line for internal temperature using helper function
+        internal_min_line =
+            create_temperature_line(chart, "internal min line", lv_palette_main(LV_PALETTE_GREEN),
+                                    internal_min_line_points);
+        if(internal_min_line == NULL)
         {
-            log_error("Failed to create internal min label");
             return;
         }
 
-        lv_obj_set_style_text_font(internal_min_label, &lv_font_montserrat_12, 0);
-        lv_obj_set_style_text_color(internal_min_label, lv_palette_main(LV_PALETTE_RED), 0);
-        lv_label_set_text_fmt(internal_min_label, "%.1f°C", internal_min_temp);
-        lv_obj_align(internal_min_label, LV_ALIGN_BOTTOM_LEFT, 5, 10);
+        // Add min value label for internal temperature using helper function
+        internal_min_label =
+            create_temperature_label(chart, "internal min label", lv_palette_main(LV_PALETTE_GREEN),
+                                     internal_min_temp, LV_ALIGN_BOTTOM_LEFT, 5, 10);
+        if(internal_min_label == NULL)
+        {
+            return;
+        }
     }
 
     if(external_data_valid && external_min_temp < 100.0f)
@@ -475,37 +502,28 @@ void refresh_climate_chart(void)
         float external_min_ratio = (external_min_temp - y_min) / (y_max - y_min);
         float external_min_y_pos = chart_h - (external_min_ratio * chart_h);
 
-        // Create min line for external temperature
-        external_min_line = lv_line_create(chart);
-        if(external_min_line == NULL)
-        {
-            log_error("Failed to create external min line");
-            return;
-        }
-
+        // Setup line points
         external_min_line_points[0].x = x_start;
         external_min_line_points[0].y = external_min_y_pos;
         external_min_line_points[1].x = x_end;
         external_min_line_points[1].y = external_min_y_pos;
 
-        lv_line_set_points(external_min_line, external_min_line_points, 2);
-        lv_obj_set_style_line_width(external_min_line, 1, 0);
-        lv_obj_set_style_line_color(external_min_line, lv_palette_main(LV_PALETTE_BLUE), 0);
-        lv_obj_set_style_line_dash_width(external_min_line, 3, 0);
-        lv_obj_set_style_line_dash_gap(external_min_line, 3, 0);
-
-        // Add min value label for external temperature
-        external_min_label = lv_label_create(chart);
-        if(external_min_label == NULL)
+        // Create min line for external temperature using helper function
+        external_min_line = create_temperature_line(
+            chart, "external min line", lv_palette_main(LV_PALETTE_BLUE), external_min_line_points);
+        if(external_min_line == NULL)
         {
-            log_error("Failed to create external min label");
             return;
         }
 
-        lv_obj_set_style_text_font(external_min_label, &lv_font_montserrat_12, 0);
-        lv_obj_set_style_text_color(external_min_label, lv_palette_main(LV_PALETTE_BLUE), 0);
-        lv_label_set_text_fmt(external_min_label, "%.1f°C", external_min_temp);
-        lv_obj_align(external_min_label, LV_ALIGN_BOTTOM_RIGHT, -5, 10);
+        // Add min value label for external temperature using helper function
+        external_min_label =
+            create_temperature_label(chart, "external min label", lv_palette_main(LV_PALETTE_BLUE),
+                                     external_min_temp, LV_ALIGN_BOTTOM_RIGHT, -5, 10);
+        if(external_min_label == NULL)
+        {
+            return;
+        }
     }
 
     // Refresh the chart to show new data

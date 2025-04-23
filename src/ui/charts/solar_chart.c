@@ -18,6 +18,74 @@ static lv_obj_t*          solar_max_line  = NULL;
 static lv_obj_t*          solar_max_label = NULL;
 static lv_point_precise_t solar_max_line_points[2];
 
+// Add a new function to clean up all chart lines and labels
+static void cleanup_solar_chart_lines_and_labels(void)
+{
+    if(solar_max_line != NULL)
+    {
+        lv_obj_del(solar_max_line);
+        solar_max_line = NULL;
+    }
+
+    if(solar_max_label != NULL)
+    {
+        lv_obj_del(solar_max_label);
+        solar_max_label = NULL;
+    }
+}
+
+// Add a function to safely create a line with error handling
+static lv_obj_t* create_solar_line(lv_obj_t* parent, const char* line_name, lv_color_t color,
+                                   lv_point_precise_t* points)
+{
+    if(parent == NULL || points == NULL)
+    {
+        log_error("Cannot create %s: Invalid parent or points", line_name);
+        return NULL;
+    }
+
+    lv_obj_t* line = lv_line_create(parent);
+    if(line == NULL)
+    {
+        log_error("Failed to create %s", line_name);
+        return NULL;
+    }
+
+    lv_line_set_points(line, points, 2);
+    lv_obj_set_style_line_width(line, 1, 0);
+    lv_obj_set_style_line_color(line, color, 0);
+    lv_obj_set_style_line_dash_width(line, 3, 0);
+    lv_obj_set_style_line_dash_gap(line, 3, 0);
+
+    return line;
+}
+
+// Add a function to safely create a label with error handling
+static lv_obj_t* create_solar_label(lv_obj_t* parent, const char* label_name, lv_color_t color,
+                                    float value, lv_align_t alignment, lv_coord_t x_offset,
+                                    lv_coord_t y_offset)
+{
+    if(parent == NULL)
+    {
+        log_error("Cannot create %s: Invalid parent", label_name);
+        return NULL;
+    }
+
+    lv_obj_t* label = lv_label_create(parent);
+    if(label == NULL)
+    {
+        log_error("Failed to create %s", label_name);
+        return NULL;
+    }
+
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(label, color, 0);
+    lv_label_set_text_fmt(label, "%.1f Wh", value);
+    lv_obj_align(label, alignment, x_offset, y_offset);
+
+    return label;
+}
+
 void initialize_solar_chart(lv_obj_t* chart_container)
 {
     // Create a chart for hourly energy
@@ -95,19 +163,8 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
         // Update the chart's Y-axis range
         lv_chart_set_range(solar_energy_chart, LV_CHART_AXIS_PRIMARY_Y, 0, range_max * 10);
 
-        // Remove previous line if it exists
-        if(solar_max_line != NULL)
-        {
-            lv_obj_del(solar_max_line);
-            solar_max_line = NULL;
-        }
-
-        // Remove previous label if it exists
-        if(solar_max_label != NULL)
-        {
-            lv_obj_del(solar_max_label);
-            solar_max_label = NULL;
-        }
+        // Use the dedicated function to clean up all lines and labels
+        cleanup_solar_chart_lines_and_labels();
 
         // Get chart content dimensions and coordinates
         lv_coord_t chart_w = lv_obj_get_content_width(solar_energy_chart);
@@ -117,14 +174,7 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
         float x_start = 1;
         float x_end   = chart_w - 1;
 
-        // Create new max line (position it exactly at max value)
-        solar_max_line = lv_line_create(solar_energy_chart);
-        if(solar_max_line == NULL)
-        {
-            log_error("Failed to create solar max line");
-            return false;
-        }
-
+        // Create new max line using helper function
         float max_y_pos = chart_h - ((max_yield / range_max) * chart_h);
 
         solar_max_line_points[0].x = x_start;
@@ -132,26 +182,22 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
         solar_max_line_points[1].x = x_end;
         solar_max_line_points[1].y = max_y_pos;
 
-        lv_line_set_points(solar_max_line, solar_max_line_points, 2);
-        lv_obj_set_style_line_width(solar_max_line, 1, 0);
-        lv_obj_set_style_line_color(solar_max_line, lv_palette_main(LV_PALETTE_GREEN), 0);
-        lv_obj_set_style_line_dash_width(solar_max_line, 3, 0);
-        lv_obj_set_style_line_dash_gap(solar_max_line, 3, 0);
-
-        // Add max value label
-        solar_max_label = lv_label_create(solar_energy_chart);
-        if(solar_max_label == NULL)
+        solar_max_line =
+            create_solar_line(solar_energy_chart, "solar max line",
+                              lv_palette_main(LV_PALETTE_GREEN), solar_max_line_points);
+        if(solar_max_line == NULL)
         {
-            log_error("Failed to create solar max label");
             return false;
         }
 
-        lv_obj_set_style_text_font(solar_max_label, &lv_font_montserrat_12, 0);
-        lv_obj_set_style_text_color(solar_max_label, lv_palette_main(LV_PALETTE_GREEN), 0);
-
-        // Update the label text with actual max value
-        lv_label_set_text_fmt(solar_max_label, "%.1f Wh", max_yield);
-        lv_obj_align(solar_max_label, LV_ALIGN_TOP_LEFT, 5, -8);
+        // Add max value label using helper function
+        solar_max_label = create_solar_label(solar_energy_chart, "solar max label",
+                                             lv_palette_main(LV_PALETTE_GREEN), max_yield,
+                                             LV_ALIGN_TOP_LEFT, 5, -8);
+        if(solar_max_label == NULL)
+        {
+            return false;
+        }
 
         // Fill chart with real data
         for(int i = 0; i < point_count && i < data_count; i++)
@@ -227,19 +273,8 @@ bool update_solar_chart(void)
                                    LV_CHART_POINT_NONE);
             lv_chart_refresh(solar_energy_chart);
 
-            // Delete max line if it exists
-            if(solar_max_line != NULL)
-            {
-                lv_obj_del(solar_max_line);
-                solar_max_line = NULL;
-            }
-
-            // Delete max label if it exists
-            if(solar_max_label != NULL)
-            {
-                lv_obj_del(solar_max_label);
-                solar_max_label = NULL;
-            }
+            // Use the dedicated function to clean up all lines and labels
+            cleanup_solar_chart_lines_and_labels();
 
             log_debug("Solar chart cleared due to invalid data");
         }
@@ -251,21 +286,10 @@ bool update_solar_chart(void)
 
 void solar_chart_cleanup(void)
 {
-    // Delete objects first before nullifying pointers
-    if(solar_max_line != NULL)
-    {
-        lv_obj_del(solar_max_line);
-        solar_max_line = NULL;
-    }
+    // Use the dedicated cleanup function instead of repeating code
+    cleanup_solar_chart_lines_and_labels();
 
-    if(solar_max_label != NULL)
-    {
-        lv_obj_del(solar_max_label);
-        solar_max_label = NULL;
-    }
-
-    // Note: solar_energy_chart and solar_hourly_energy_series will be deleted
-    // by LVGL when their parent is deleted
+    // Note: chart and series will be deleted by LVGL when their parent is deleted
     solar_hourly_energy_series = NULL;
     solar_energy_chart         = NULL;
 
