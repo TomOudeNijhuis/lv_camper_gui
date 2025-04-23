@@ -66,7 +66,7 @@ extern "C"
      ****************************************************************************/
 
 #define DATA_UPDATE_INTERVAL_MS 5003       /* Data refresh interval in ms */
-#define DATA_CHART_UPDATE_INTERVAL_MS 3001 /* Chart refresh interval */
+#define DATA_CHART_UPDATE_INTERVAL_MS 6002 /* Chart refresh interval */
 #define LOG_REFRESH_INTERVAL_MS 2999       /* Log display refresh interval in ms */
 #define BACKGROUND_FETCH_SLEEP_US 199999   /* Background fetcher sleep time in microseconds */
 

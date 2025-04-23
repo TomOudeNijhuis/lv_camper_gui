@@ -29,6 +29,14 @@ static lv_obj_t*   charging_icon        = NULL;
 static lv_timer_t* update_timer         = NULL;
 static lv_timer_t* update_long_timer    = NULL;
 
+typedef enum
+{
+    HISTORY_TEMP_INSIDE,
+    HISTORY_TEMP_OUTSIDE,
+    HISTORY_TEMP_SOLAR,
+    HISTORY_TEMP_BATTERY
+} history_state_t;
+
 /**
  * Timer callback to update energy and temperature data
  */
@@ -199,115 +207,65 @@ static void update_timer_cb(lv_timer_t* timer)
 
 static void update_long_timer_cb(lv_timer_t* timer)
 {
-    static int fetch_state    = 0;
-    bool       result         = false;
-    static int fetch_interval = 0;
-    static int fetch_valid    = 0;
-    static int fetch_attempts = 0; // Track consecutive fetch attempts
+    static history_state_t fetch_state = HISTORY_TEMP_INSIDE;
 
     if(ui_is_sleeping())
     {
-        fetch_state    = 0;
-        fetch_interval = 0;
-        fetch_attempts = 0;
         return;
     }
 
-    if(fetch_interval > 0)
+    if(fetch_state == HISTORY_TEMP_INSIDE)
     {
-        fetch_interval -= 1;
-        return;
+        if(request_entity_history("inside", "temperature", "1h", 48))
+            fetch_state = HISTORY_TEMP_OUTSIDE;
+    }
+    else if(fetch_state == HISTORY_TEMP_OUTSIDE)
+    {
+        if(request_entity_history("outside", "temperature", "1h", 48))
+            fetch_state = HISTORY_TEMP_SOLAR;
+    }
+    else if(fetch_state == HISTORY_TEMP_SOLAR)
+    {
+        if(request_entity_history("SmartSolar", "yield_today", "1h", 49))
+            fetch_state = HISTORY_TEMP_BATTERY;
+    }
+    else if(fetch_state == HISTORY_TEMP_BATTERY)
+    {
+        if(request_entity_history("SmartShunt", "consumed_ah", "1h", 49))
+            fetch_state = HISTORY_TEMP_INSIDE;
     }
 
-    if(fetch_state == 0)
+    // Check if historical data is available
+    entity_history_t* history_data = get_entity_history_data();
+
+    if(history_data != NULL)
     {
-        result = fetch_internal_climate();
-        if(result)
-            fetch_valid = 1;
-        else
-            fetch_attempts++;
+        if(history_data->valid)
+        {
+            if(strcmp(history_data->sensor_name, "inside") == 0)
+            {
+                update_climate_chart_with_history(history_data, true);
+            }
+            else if(strcmp(history_data->sensor_name, "outside") == 0)
+            {
+                update_climate_chart_with_history(history_data, false);
+            }
+            else if(strcmp(history_data->sensor_name, "SmartSolar") == 0)
+            {
+                update_solar_chart_with_history(history_data);
+            }
+            else if(strcmp(history_data->sensor_name, "SmartShunt") == 0)
+            {
+                update_energy_chart_with_history(history_data);
+            }
+            else
+            {
+                log_warning("Unknown sensor name in history data: %s", history_data->sensor_name);
+            }
+        }
 
-        fetch_state = 1;
-    }
-    else if(fetch_state == 1)
-    {
-        result = update_internal_climate_chart();
-        if(result)
-            fetch_valid += 1;
-        else
-            fetch_attempts++;
-
-        fetch_state = 2;
-    }
-    else if(fetch_state == 2)
-    {
-        result = fetch_external_climate();
-        if(result)
-            fetch_valid += 1;
-        else
-            fetch_attempts++;
-
-        fetch_state = 3;
-    }
-    else if(fetch_state == 3)
-    {
-        result = update_external_climate_chart();
-        if(result)
-            fetch_valid += 1;
-        else
-            fetch_attempts++;
-
-        fetch_state = 4;
-    }
-    else if(fetch_state == 4)
-    {
-        result = fetch_solar();
-        if(result)
-            fetch_valid += 1;
-        else
-            fetch_attempts++;
-
-        fetch_state = 5;
-    }
-    else if(fetch_state == 5)
-    {
-        result = update_solar_chart();
-        if(result)
-            fetch_valid += 1;
-        else
-            fetch_attempts++;
-
-        fetch_state = 6;
-    }
-    else if(fetch_state == 6)
-    {
-        result = fetch_battery_consumption();
-        if(result)
-            fetch_valid += 1;
-        else
-            fetch_attempts++;
-
-        fetch_state = 7;
-    }
-    else if(fetch_state == 7)
-    {
-        result = update_energy_chart();
-        if(result)
-            fetch_valid += 1;
-        else
-            fetch_attempts++;
-
-        fetch_state = 0;
-
-        // If we've had too many failed fetch attempts, reset the charts
-        if(fetch_attempts >= 3)
-            fetch_attempts = 0;
-
-        fetch_valid = 0;
-        if(fetch_valid >= 5)
-            fetch_interval = 5;
-        else
-            fetch_interval = 0;
+        // Always free the history data when we're done with it
+        free_entity_history_data(history_data);
     }
 }
 

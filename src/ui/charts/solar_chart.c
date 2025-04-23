@@ -233,57 +233,6 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
     return false;
 }
 
-bool fetch_solar(void)
-{
-    bool result = request_entity_history("SmartSolar", "yield_today", "1h", 49);
-    if(!result)
-    {
-        log_warning("Failed to request solar yield history data");
-    }
-    else
-    {
-        log_debug("Requested solar yield history data");
-    }
-    return result;
-}
-
-bool update_solar_chart(void)
-{
-    // Check if historical data is available
-    entity_history_t* history_data = get_entity_history_data();
-    if(history_data == NULL)
-        return false;
-
-    bool success = false;
-
-    // Safely check sensor name (avoid segfault if strings are not properly initialized)
-    if(history_data->valid && history_data->count > 0 && history_data->sensor_name != NULL &&
-       history_data->sensor_name[0] != '\0' && history_data->max != NULL &&
-       strcmp(history_data->sensor_name, "SmartSolar") == 0)
-    {
-        success = update_solar_chart_with_history(history_data);
-    }
-    else
-    {
-        // Clear chart when data is invalid - with improved null checks
-        if(solar_energy_chart != NULL && solar_hourly_energy_series != NULL)
-        {
-            // Safely clear chart data
-            lv_chart_set_all_value(solar_energy_chart, solar_hourly_energy_series,
-                                   LV_CHART_POINT_NONE);
-            lv_chart_refresh(solar_energy_chart);
-
-            // Use the dedicated function to clean up all lines and labels
-            cleanup_solar_chart_lines_and_labels();
-
-            log_debug("Solar chart cleared due to invalid data");
-        }
-    }
-
-    free_entity_history_data(history_data);
-    return success;
-}
-
 void solar_chart_cleanup(void)
 {
     // Use the dedicated cleanup function instead of repeating code

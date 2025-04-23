@@ -201,17 +201,20 @@ void temp_chart_cleanup(void)
 // Split the update_climate_chart_with_history to handle one source at a time
 void update_climate_chart_with_history(entity_history_t* history_data, bool is_internal)
 {
-    if(chart == NULL || history_data == NULL || !history_data->valid || history_data->mean == NULL)
-    {
-        log_warning("Invalid climate chart data received, skipping update");
-        return;
-    }
-
-    // Store the data in our static arrays
     int data_count = history_data->count;
-    if(data_count <= 0)
+    if(chart == NULL || history_data->mean == NULL || data_count <= 0)
     {
-        log_warning("Empty climate chart data received, skipping update");
+        if(is_internal)
+        {
+            internal_data_valid = false;
+        }
+        else
+        {
+            external_data_valid = false;
+        }
+        refresh_climate_chart();
+
+        log_warning("Invalid climate chart data received, skipping update");
         return;
     }
 
@@ -531,95 +534,6 @@ void refresh_climate_chart(void)
 
     log_debug("Climate chart updated with %d temperature points (range: %.1f-%.1f°C)",
               temp_data_count, min_temp_overall, max_temp_overall);
-}
-
-bool fetch_internal_climate(void)
-{
-    bool result = request_entity_history("inside", "temperature", "1h", 48);
-    if(!result)
-    {
-        log_warning("Failed to request internal temperature history data");
-    }
-    else
-    {
-        log_debug("Requested internal temperature history data");
-    }
-    return result;
-}
-
-bool fetch_external_climate(void)
-{
-    bool result = request_entity_history("outside", "temperature", "1h", 48);
-    if(!result)
-    {
-        log_warning("Failed to request external temperature history data");
-    }
-    else
-    {
-        log_debug("Requested external temperature history data");
-    }
-    return result;
-}
-
-// Process internal climate data
-bool update_internal_climate_chart(void)
-{
-    // Check if historical data is available
-    entity_history_t* history_data = get_entity_history_data();
-
-    // If data is NULL or invalid, clear internal data and refresh chart
-    if(history_data == NULL || !history_data->valid || history_data->mean == NULL ||
-       history_data->count <= 0 || history_data->sensor_name == NULL ||
-       history_data->sensor_name[0] == '\0')
-    {
-        internal_data_valid = false;
-        refresh_climate_chart();
-        if(history_data != NULL)
-            free_entity_history_data(history_data);
-        log_warning("Invalid internal temperature data received, clearing chart");
-        return false;
-    }
-    else if(strcmp(history_data->sensor_name, "inside") != 0)
-    {
-        log_warning("Invalid inside temperature data received, got '%s'",
-                    history_data->sensor_name);
-        return false;
-    }
-
-    // Process valid data
-    update_climate_chart_with_history(history_data, true);
-    free_entity_history_data(history_data);
-    return true;
-}
-
-// Process external climate data
-bool update_external_climate_chart(void)
-{
-    // Check if historical data is available
-    entity_history_t* history_data = get_entity_history_data();
-
-    // If data is NULL or invalid, clear external data and refresh chart
-    if(history_data == NULL || !history_data->valid || history_data->mean == NULL ||
-       history_data->count <= 0 || history_data->sensor_name == NULL ||
-       history_data->sensor_name[0] == '\0')
-    {
-        external_data_valid = false;
-        refresh_climate_chart();
-        if(history_data != NULL)
-            free_entity_history_data(history_data);
-        log_warning("Invalid external temperature data received, clearing chart");
-        return false;
-    }
-    else if(strcmp(history_data->sensor_name, "outside") != 0)
-    {
-        log_warning("Invalid outside temperature data received, got '%s'",
-                    history_data->sensor_name);
-        return false;
-    }
-    // Process valid data
-    update_climate_chart_with_history(history_data, false);
-    free_entity_history_data(history_data);
-    return true;
 }
 
 // Reset the chart if data is invalid

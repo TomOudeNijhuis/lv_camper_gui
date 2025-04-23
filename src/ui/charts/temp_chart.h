@@ -13,14 +13,6 @@ void update_climate_chart_with_history(entity_history_t* history_data, bool is_i
 void refresh_climate_chart(void);
 void reset_climate_chart(void);
 
-// Data fetching functions
-bool fetch_internal_climate(void);
-bool fetch_external_climate(void);
-
-// Combined fetch and update functions
-bool update_internal_climate_chart(void);
-bool update_external_climate_chart(void);
-
 // Cleanup function
 void temp_chart_cleanup(void);
 

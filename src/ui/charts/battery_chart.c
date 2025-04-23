@@ -225,57 +225,6 @@ bool update_energy_chart_with_history(entity_history_t* history_data)
     return false;
 }
 
-bool fetch_battery_consumption(void)
-{
-    bool result = request_entity_history("SmartShunt", "consumed_ah", "1h", 49);
-    if(!result)
-    {
-        log_warning("Failed to request battery consumption history data");
-    }
-    else
-    {
-        log_debug("Requested battery consumption history data");
-    }
-    return result;
-}
-
-bool update_energy_chart(void)
-{
-    // Check if historical data is available
-    entity_history_t* history_data = get_entity_history_data();
-    if(history_data == NULL)
-        return false;
-
-    bool success = false;
-
-    // Safely check sensor name
-    if(history_data->valid && history_data->sensor_name != NULL &&
-       history_data->sensor_name[0] != '\0' &&
-       strcmp(history_data->sensor_name, "SmartShunt") == 0 && history_data->max != NULL &&
-       history_data->count > 0)
-    {
-        success = update_energy_chart_with_history(history_data);
-    }
-    else
-    {
-        // Clear chart when data is invalid
-        if(energy_chart != NULL && hourly_energy_series != NULL)
-        {
-            // Safely clear chart data
-            lv_chart_set_all_value(energy_chart, hourly_energy_series, LV_CHART_POINT_NONE);
-            lv_chart_refresh(energy_chart);
-
-            // Use the dedicated cleanup function instead of repeating code
-            cleanup_energy_chart_lines_and_labels();
-
-            log_debug("Energy chart cleared due to invalid data");
-        }
-    }
-
-    free_entity_history_data(history_data);
-    return success;
-}
-
 void battery_chart_cleanup(void)
 {
     // Use the dedicated cleanup function instead of repeating code

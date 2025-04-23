@@ -15,7 +15,8 @@
         "http_client.h": "c",
         "cstdlib": "c",
         "stdlib.h": "c",
-        "stdbool.h": "c"
+        "stdbool.h": "c",
+        "functional": "c"
     },
     "editor.formatOnSave": true,
     "C_Cpp.clang_format_style": "file",
