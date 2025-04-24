@@ -189,12 +189,16 @@ bool parse_smart_shunt(const char* json_str, smart_shunt_t* shunt_data)
             temp_shunt.consumed_ah = atof(state_str);
             field_count++;
         }
+        else
+        {
+            log_warning("Unknown entity name in smart shunt data: %s", entity_name);
+        }
     }
 
     // Check if we found at least 5 required fields
     if(field_count < 5)
     {
-        log_error("Smart shunt data must contain at least 5 fields");
+        log_error("Smart shunt data must contain at least 5 fields, json contains %d", field_count);
         json_object_put(parsed_json);
         return false;
     }

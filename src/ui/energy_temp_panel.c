@@ -167,25 +167,25 @@ static void update_camper_timer_cb(lv_timer_t* timer)
             }
             else
             {
-                lv_label_set_text(solar_state_icon, "---");
+                lv_label_set_text(solar_state_icon, "");
             }
 
             // Set charging icon based on charge state - using different arrow sizes
-            if(strcmp(solar_data->charge_state, "Bulk") == 0)
+            if(strcmp(solar_data->charge_state, "bulk") == 0)
             {
                 // Strongest charging - use regular arrow up
                 lv_label_set_text(charging_icon, LV_SYMBOL_ARROW_UP);
                 lv_obj_set_style_text_color(charging_icon, lv_color_hex(0xFF0000),
                                             0); // Red for bulk charging
             }
-            else if(strcmp(solar_data->charge_state, "Absorption") == 0)
+            else if(strcmp(solar_data->charge_state, "absorption") == 0)
             {
                 // Medium charging - use square arrow
                 lv_label_set_text(charging_icon, LV_SYMBOL_ARROW_UP_SQUARE);
                 lv_obj_set_style_text_color(charging_icon, lv_color_hex(0xFFCC00),
                                             0); // Yellow for absorption
             }
-            else if(strcmp(solar_data->charge_state, "Float") == 0)
+            else if(strcmp(solar_data->charge_state, "float") == 0)
             {
                 // Light charging - use thin arrow
                 lv_label_set_text(charging_icon, LV_SYMBOL_ARROW_UP_THIN);
