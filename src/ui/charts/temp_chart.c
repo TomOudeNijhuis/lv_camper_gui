@@ -15,11 +15,11 @@ static lv_chart_series_t* external_temp_series = NULL;
 static lv_obj_t*          chart                = NULL;
 
 // Add static variables to store temperature history data
-static float internal_temp_data[48] = {0};
-static float external_temp_data[48] = {0};
-static int   temp_data_count        = 0;
-static bool  internal_data_valid    = false;
-static bool  external_data_valid    = false;
+static int32_t internal_temp_data[48] = {0};
+static int32_t external_temp_data[48] = {0};
+static int     temp_data_count        = 0;
+static bool    internal_data_valid    = false;
+static bool    external_data_valid    = false;
 
 // Add static variables for climate chart min/max lines and labels
 static lv_obj_t* internal_max_line  = NULL;
@@ -154,10 +154,11 @@ static lv_obj_t* create_temperature_line(lv_obj_t* parent, const char* line_name
     return line;
 }
 
-// Add a function to safely create a temperature label with error handling
+// Update create_temperature_label to use int32_t
 static lv_obj_t* create_temperature_label(lv_obj_t* parent, const char* label_name,
-                                          lv_color_t color, float temperature, lv_align_t alignment,
-                                          lv_coord_t x_offset, lv_coord_t y_offset)
+                                          lv_color_t color, int32_t temperature_fixed,
+                                          lv_align_t alignment, lv_coord_t x_offset,
+                                          lv_coord_t y_offset)
 {
     if(parent == NULL)
     {
@@ -174,6 +175,8 @@ static lv_obj_t* create_temperature_label(lv_obj_t* parent, const char* label_na
 
     lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(label, color, 0);
+    // Convert from fixed point (x10) to float for display
+    float temperature = temperature_fixed / 10.0f;
     lv_label_set_text_fmt(label, "%.1f°C", temperature);
     lv_obj_align(label, alignment, x_offset, y_offset);
 
@@ -221,19 +224,35 @@ void update_climate_chart_with_history(entity_history_t* history_data, bool is_i
     // Copy mean values to appropriate array
     if(is_internal)
     {
+        // Copy available data
         for(int i = 0; i < data_count; i++)
         {
-            internal_temp_data[i] = history_data->mean[i];
+            internal_temp_data[i] = (int32_t)(history_data->mean[i] * 10);
         }
+
+        // Fill remaining elements with LV_CHART_POINT_NONE
+        for(int i = data_count; i < 48; i++)
+        {
+            internal_temp_data[i] = LV_CHART_POINT_NONE;
+        }
+
         internal_data_valid = true;
         temp_data_count     = data_count;
     }
     else
     {
+        // Copy available data
         for(int i = 0; i < data_count; i++)
         {
-            external_temp_data[i] = history_data->mean[i];
+            external_temp_data[i] = (int32_t)(history_data->mean[i] * 10);
         }
+
+        // Fill remaining elements with LV_CHART_POINT_NONE
+        for(int i = data_count; i < 48; i++)
+        {
+            external_temp_data[i] = LV_CHART_POINT_NONE;
+        }
+
         external_data_valid = true;
         if(temp_data_count < data_count)
             temp_data_count = data_count;
@@ -295,22 +314,26 @@ void refresh_climate_chart(void)
     // Get the point count in the chart
     uint16_t point_count = lv_chart_get_point_count(chart);
 
-    // Find the overall min and max temperature values
-    float min_temp_overall = 100.0f;  // Start with high value
-    float max_temp_overall = -100.0f; // Start with low value
-    bool  range_set        = false;
+    // Find the overall min and max temperature values (using fixed point)
+    int32_t min_temp_overall = 1000;  // Start with high value (100.0°C)
+    int32_t max_temp_overall = -1000; // Start with low value (-100.0°C)
+    bool    range_set        = false;
 
-    // Find min/max for each series
-    float internal_max_temp = -100.0f;
-    float external_max_temp = -100.0f;
-    float internal_min_temp = 100.0f;
-    float external_min_temp = 100.0f;
+    // Find min/max for each series (using fixed point)
+    int32_t internal_max_temp = -1000;
+    int32_t external_max_temp = -1000;
+    int32_t internal_min_temp = 1000;
+    int32_t external_min_temp = 1000;
 
     // Consider internal temperature values if valid
     if(internal_data_valid)
     {
         for(int i = 0; i < temp_data_count; i++)
         {
+            // Skip invalid/no-data points
+            if(internal_temp_data[i] == LV_CHART_POINT_NONE)
+                continue;
+
             if(internal_temp_data[i] < min_temp_overall)
                 min_temp_overall = internal_temp_data[i];
             if(internal_temp_data[i] > max_temp_overall)
@@ -328,6 +351,10 @@ void refresh_climate_chart(void)
     {
         for(int i = 0; i < temp_data_count; i++)
         {
+            // Skip invalid/no-data points
+            if(external_temp_data[i] == LV_CHART_POINT_NONE)
+                continue;
+
             if(external_temp_data[i] < min_temp_overall)
                 min_temp_overall = external_temp_data[i];
             if(external_temp_data[i] > max_temp_overall)
@@ -343,21 +370,21 @@ void refresh_climate_chart(void)
     // If no range was set, use default range
     if(!range_set)
     {
-        min_temp_overall = 15.0f;
-        max_temp_overall = 25.0f;
+        min_temp_overall = 150; // 15.0°C in fixed point
+        max_temp_overall = 250; // 25.0°C in fixed point
     }
 
     // Add a 10% padding to the range to avoid data points touching the edges
-    float range_padding = (max_temp_overall - min_temp_overall) * 0.1f;
-    if(range_padding < 2.0f)
-        range_padding = 2.0f; // At least 2 degrees padding
+    int32_t range         = max_temp_overall - min_temp_overall;
+    int32_t range_padding = range / 10; // 10% padding
+    if(range_padding < 20)              // At least 2 degrees padding (20 in fixed point)
+        range_padding = 20;
 
-    float y_min = floor(min_temp_overall - range_padding);
-    float y_max = ceil(max_temp_overall + range_padding);
+    int32_t y_min = min_temp_overall - range_padding;
+    int32_t y_max = max_temp_overall + range_padding;
 
-    // Update the chart's Y-axis range with fixed-point values (multiplied by 10)
-    lv_chart_set_range(chart, LV_CHART_AXIS_PRIMARY_Y, (int16_t)(y_min * 10),
-                       (int16_t)(y_max * 10));
+    // Update the chart's Y-axis range
+    lv_chart_set_range(chart, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
 
     // Use the dedicated function to clean up all lines and labels
     cleanup_temperature_chart_lines_and_labels();
@@ -373,8 +400,8 @@ void refresh_climate_chart(void)
             // Internal temperature if valid
             if(internal_data_valid)
             {
-                int internal_temp = (int)(internal_temp_data[idx] * 10); // Convert to fixed point
-                lv_chart_set_next_value(chart, internal_temp_series, internal_temp);
+                // No need for conversion, it's already in fixed point format
+                lv_chart_set_next_value(chart, internal_temp_series, internal_temp_data[idx]);
             }
             else
             {
@@ -384,8 +411,8 @@ void refresh_climate_chart(void)
             // External temperature if valid
             if(external_data_valid)
             {
-                int external_temp = (int)(external_temp_data[idx] * 10); // Convert to fixed point
-                lv_chart_set_next_value(chart, external_temp_series, external_temp);
+                // No need for conversion, it's already in fixed point format
+                lv_chart_set_next_value(chart, external_temp_series, external_temp_data[idx]);
             }
             else
             {
@@ -403,10 +430,10 @@ void refresh_climate_chart(void)
     float x_end   = chart_w - 1;
 
     // Add max value lines and labels for valid series
-    if(internal_data_valid && internal_max_temp > -100.0f)
+    if(internal_data_valid && internal_max_temp > -1000)
     {
-        // Calculate y position for internal max line
-        float internal_max_ratio = (internal_max_temp - y_min) / (y_max - y_min);
+        // Calculate y position for internal max line using fixed point value
+        float internal_max_ratio = (float)(internal_max_temp - y_min) / (y_max - y_min);
         float internal_max_y_pos = chart_h - (internal_max_ratio * chart_h);
 
         // Setup line points
@@ -424,7 +451,8 @@ void refresh_climate_chart(void)
             return;
         }
 
-        // Add max value label for internal temperature using helper function
+        // Add max value label for internal temperature using helper function (pass fixed point
+        // value)
         internal_max_label =
             create_temperature_label(chart, "internal max label", lv_palette_main(LV_PALETTE_GREEN),
                                      internal_max_temp, LV_ALIGN_TOP_LEFT, 5, -8);
@@ -434,10 +462,10 @@ void refresh_climate_chart(void)
         }
     }
 
-    if(external_data_valid && external_max_temp > -100.0f)
+    if(external_data_valid && external_max_temp > -1000)
     {
-        // Calculate y position for external max line
-        float external_max_ratio = (external_max_temp - y_min) / (y_max - y_min);
+        // Calculate y position for external max line using fixed point value
+        float external_max_ratio = (float)(external_max_temp - y_min) / (y_max - y_min);
         float external_max_y_pos = chart_h - (external_max_ratio * chart_h);
 
         // Setup line points
@@ -454,7 +482,8 @@ void refresh_climate_chart(void)
             return;
         }
 
-        // Add max value label for external temperature using helper function
+        // Add max value label for external temperature using helper function (pass fixed point
+        // value)
         external_max_label =
             create_temperature_label(chart, "external max label", lv_palette_main(LV_PALETTE_BLUE),
                                      external_max_temp, LV_ALIGN_TOP_RIGHT, -5, -8);
@@ -465,10 +494,10 @@ void refresh_climate_chart(void)
     }
 
     // Add min value lines and labels for valid series
-    if(internal_data_valid && internal_min_temp < 100.0f)
+    if(internal_data_valid && internal_min_temp < 1000)
     {
-        // Calculate y position for internal min line
-        float internal_min_ratio = (internal_min_temp - y_min) / (y_max - y_min);
+        // Calculate y position for internal min line using fixed point value
+        float internal_min_ratio = (float)(internal_min_temp - y_min) / (y_max - y_min);
         float internal_min_y_pos = chart_h - (internal_min_ratio * chart_h);
 
         // Setup line points
@@ -486,7 +515,8 @@ void refresh_climate_chart(void)
             return;
         }
 
-        // Add min value label for internal temperature using helper function
+        // Add min value label for internal temperature using helper function (pass fixed point
+        // value)
         internal_min_label =
             create_temperature_label(chart, "internal min label", lv_palette_main(LV_PALETTE_GREEN),
                                      internal_min_temp, LV_ALIGN_BOTTOM_LEFT, 5, 10);
@@ -496,10 +526,10 @@ void refresh_climate_chart(void)
         }
     }
 
-    if(external_data_valid && external_min_temp < 100.0f)
+    if(external_data_valid && external_min_temp < 1000)
     {
-        // Calculate y position for external min line
-        float external_min_ratio = (external_min_temp - y_min) / (y_max - y_min);
+        // Calculate y position for external min line using fixed point value
+        float external_min_ratio = (float)(external_min_temp - y_min) / (y_max - y_min);
         float external_min_y_pos = chart_h - (external_min_ratio * chart_h);
 
         // Setup line points
@@ -516,7 +546,8 @@ void refresh_climate_chart(void)
             return;
         }
 
-        // Add min value label for external temperature using helper function
+        // Add min value label for external temperature using helper function (pass fixed point
+        // value)
         external_min_label =
             create_temperature_label(chart, "external min label", lv_palette_main(LV_PALETTE_BLUE),
                                      external_min_temp, LV_ALIGN_BOTTOM_RIGHT, -5, 10);
@@ -529,8 +560,11 @@ void refresh_climate_chart(void)
     // Refresh the chart to show new data
     lv_chart_refresh(chart);
 
+    // Convert to float for logging
+    float min_temp = min_temp_overall / 10.0f;
+    float max_temp = max_temp_overall / 10.0f;
     log_debug("Climate chart updated with %d temperature points (range: %.1f-%.1f°C)",
-              temp_data_count, min_temp_overall, max_temp_overall);
+              temp_data_count, min_temp, max_temp);
 }
 
 // Reset the chart if data is invalid
