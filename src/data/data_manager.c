@@ -40,6 +40,9 @@ typedef struct
 {
     fetch_request_type_t request_type;
     uint32_t             timestamp; // For prioritization if needed
+
+    // For history requests
+    history_request_t history_params;
 } fetch_request_t;
 
 static fetch_request_t fetch_queue[MAX_FETCH_QUEUE];
@@ -50,6 +53,8 @@ static pthread_mutex_t fetch_mutex      = PTHREAD_MUTEX_INITIALIZER;
 static bool is_fetch_queue_empty(void);
 static bool is_fetch_queue_full(void);
 static bool enqueue_fetch_request(fetch_request_type_t request_type);
+static bool enqueue_fetch_request_with_history(fetch_request_type_t request_type,
+                                               history_request_t*   history_params);
 static bool dequeue_fetch_request(fetch_request_t* action);
 
 // Action queue
@@ -218,19 +223,115 @@ bool request_entity_history(const char* sensor_name, const char* entity_name, co
         return false;
     }
 
-    // Store request parameters for later use
-    pthread_mutex_lock(&data_mutex);
-    snprintf(current_history_request.sensor_name, sizeof(current_history_request.sensor_name), "%s",
-             sensor_name);
-    snprintf(current_history_request.entity_name, sizeof(current_history_request.entity_name), "%s",
-             entity_name);
-    snprintf(current_history_request.interval, sizeof(current_history_request.interval), "%s",
-             interval);
-    current_history_request.samples = samples;
-    pthread_mutex_unlock(&data_mutex);
+    // Create history request with parameters
+    history_request_t request;
+    snprintf(request.sensor_name, sizeof(request.sensor_name), "%s", sensor_name);
+    snprintf(request.entity_name, sizeof(request.entity_name), "%s", entity_name);
+    snprintf(request.interval, sizeof(request.interval), "%s", interval);
+    request.samples = samples;
 
-    // Queue the request
-    return request_data_fetch(FETCH_ENTITY_HISTORY);
+    // Queue the request with history parameters
+    bool queued = enqueue_fetch_request_with_history(FETCH_ENTITY_HISTORY, &request);
+
+    // Store the current request parameters for reference (still used by get_entity_history_data)
+    if(queued)
+    {
+        pthread_mutex_lock(&data_mutex);
+        memcpy(&current_history_request, &request, sizeof(history_request_t));
+        pthread_mutex_unlock(&data_mutex);
+    }
+
+    return queued;
+}
+
+// New function to enqueue a fetch request with history parameters
+static bool enqueue_fetch_request_with_history(fetch_request_type_t request_type,
+                                               history_request_t*   history_params)
+{
+    bool result = false;
+
+    pthread_mutex_lock(&fetch_mutex);
+
+    // Check if same request is already in queue (de-duplication)
+    bool duplicate = false;
+    int  i         = fetch_queue_head;
+    while(i != fetch_queue_tail)
+    {
+        if(fetch_queue[i].request_type == request_type)
+        {
+            duplicate = true;
+            break;
+        }
+        i = (i + 1) % MAX_FETCH_QUEUE;
+    }
+
+    if(!duplicate && !is_fetch_queue_full())
+    {
+        fetch_queue[fetch_queue_tail].request_type = request_type;
+        fetch_queue[fetch_queue_tail].timestamp    = time(NULL);
+
+        if(history_params && request_type == FETCH_ENTITY_HISTORY)
+        {
+            memcpy(&fetch_queue[fetch_queue_tail].history_params, history_params,
+                   sizeof(history_request_t));
+        }
+
+        fetch_queue_tail = (fetch_queue_tail + 1) % MAX_FETCH_QUEUE;
+        result           = true;
+    }
+
+    pthread_mutex_unlock(&fetch_mutex);
+
+    return result;
+}
+
+// Wrapper for backward compatibility
+static bool enqueue_fetch_request(fetch_request_type_t request_type)
+{
+    return enqueue_fetch_request_with_history(request_type, NULL);
+}
+
+static bool is_fetch_queue_empty(void)
+{
+    return fetch_queue_head == fetch_queue_tail;
+}
+
+static bool is_fetch_queue_full(void)
+{
+    return ((fetch_queue_tail + 1) % MAX_FETCH_QUEUE) == fetch_queue_head;
+}
+
+static bool dequeue_fetch_request(fetch_request_t* request)
+{
+    bool   result       = false;
+    time_t current_time = time(NULL);
+
+    pthread_mutex_lock(&fetch_mutex);
+
+    while(!is_fetch_queue_empty())
+    {
+        *request = fetch_queue[fetch_queue_head];
+
+        // Check if the request is stale
+        if(current_time - request->timestamp > REQUEST_TIMEOUT_SECONDS)
+        {
+            // Log that we're skipping a stale request
+            log_warning("Skipping stale request type %d (age: %ld seconds)", request->request_type,
+                        current_time - request->timestamp);
+
+            // Move to the next request
+            fetch_queue_head = (fetch_queue_head + 1) % MAX_FETCH_QUEUE;
+            continue;
+        }
+
+        fetch_queue_head = (fetch_queue_head + 1) % MAX_FETCH_QUEUE;
+        result           = true;
+        break;
+    }
+
+    pthread_mutex_unlock(&fetch_mutex);
+
+    return result;
 }
 
 /**
@@ -287,81 +388,6 @@ static bool dequeue_action(camper_action_t* action)
     }
 
     pthread_mutex_unlock(&action_mutex);
-
-    return result;
-}
-
-static bool is_fetch_queue_empty(void)
-{
-    return fetch_queue_head == fetch_queue_tail;
-}
-
-static bool is_fetch_queue_full(void)
-{
-    return ((fetch_queue_tail + 1) % MAX_FETCH_QUEUE) == fetch_queue_head;
-}
-
-static bool enqueue_fetch_request(fetch_request_type_t request_type)
-{
-    bool result = false;
-
-    pthread_mutex_lock(&fetch_mutex);
-
-    // Check if same request is already in queue (de-duplication)
-    bool duplicate = false;
-    int  i         = fetch_queue_head;
-    while(i != fetch_queue_tail)
-    {
-        if(fetch_queue[i].request_type == request_type)
-        {
-            duplicate = true;
-            break;
-        }
-        i = (i + 1) % MAX_FETCH_QUEUE;
-    }
-
-    if(!duplicate && !is_fetch_queue_full())
-    {
-        fetch_queue[fetch_queue_tail].request_type = request_type;
-        fetch_queue[fetch_queue_tail].timestamp    = time(NULL);
-        fetch_queue_tail                           = (fetch_queue_tail + 1) % MAX_FETCH_QUEUE;
-        result                                     = true;
-    }
-
-    pthread_mutex_unlock(&fetch_mutex);
-
-    return result;
-}
-
-static bool dequeue_fetch_request(fetch_request_t* request)
-{
-    bool   result       = false;
-    time_t current_time = time(NULL);
-
-    pthread_mutex_lock(&fetch_mutex);
-
-    while(!is_fetch_queue_empty())
-    {
-        *request = fetch_queue[fetch_queue_head];
-
-        // Check if the request is stale
-        if(current_time - request->timestamp > REQUEST_TIMEOUT_SECONDS)
-        {
-            // Log that we're skipping a stale request
-            log_warning("Skipping stale request type %d (age: %ld seconds)", request->request_type,
-                        current_time - request->timestamp);
-
-            // Move to the next request
-            fetch_queue_head = (fetch_queue_head + 1) % MAX_FETCH_QUEUE;
-            continue;
-        }
-
-        fetch_queue_head = (fetch_queue_head + 1) % MAX_FETCH_QUEUE;
-        result           = true;
-        break;
-    }
-
-    pthread_mutex_unlock(&fetch_mutex);
 
     return result;
 }
@@ -724,10 +750,12 @@ static int fetch_entity_history_data_internal(void)
     char              api_url[MAX_URL_LENGTH];
     history_request_t request;
 
-    // Get a copy of the request parameters
-    pthread_mutex_lock(&data_mutex);
-    memcpy(&request, &current_history_request, sizeof(history_request_t));
-    pthread_mutex_unlock(&data_mutex);
+    // Get the history request parameters from the current request being processed
+    pthread_mutex_lock(&fetch_mutex);
+    // Look at head-1 position since we've already dequeued
+    int previous_head = (fetch_queue_head == 0) ? MAX_FETCH_QUEUE - 1 : fetch_queue_head - 1;
+    memcpy(&request, &fetch_queue[previous_head].history_params, sizeof(history_request_t));
+    pthread_mutex_unlock(&fetch_mutex);
 
     // Construct the API URL with the request parameters
     snprintf(api_url, sizeof(api_url), "%s/grouped_states_by_name/%s/%s?period=%s&samples=%d",

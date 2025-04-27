@@ -42,28 +42,47 @@ typedef enum
  */
 static void update_camper_timer_cb(lv_timer_t* timer)
 {
-    bool result = request_data_fetch(FETCH_CLIMATE_INSIDE);
-    if(!result)
+    static uint32_t last_update_time = 0;
+    uint32_t        current_time     = lv_tick_get();
+
+    // Skip update if less than 60 seconds (1 minute) has passed since last update
+    if(last_update_time != 0 && current_time - last_update_time < 60 * 1000)
     {
-        log_warning("Failed to request inside climate data fetch");
+        // pass
+    }
+    else
+    {
+        // Update the timestamp
+        last_update_time = current_time;
+
+        bool result = request_data_fetch(FETCH_CLIMATE_INSIDE);
+        if(!result)
+        {
+            log_warning("Failed to request inside climate data fetch");
+        }
+
+        result = request_data_fetch(FETCH_CLIMATE_OUTSIDE);
+        if(!result)
+        {
+            log_warning("Failed to request outside climate data fetch");
+        }
+
+        result = request_data_fetch(FETCH_SMART_SOLAR);
+        if(!result)
+        {
+            log_warning("Failed to request smart_solar data fetch");
+        }
+
+        result = request_data_fetch(FETCH_SMART_SHUNT);
+        if(!result)
+        {
+            log_warning("Failed to request smart_shunt data fetch");
+        }
     }
 
-    result = request_data_fetch(FETCH_CLIMATE_OUTSIDE);
-    if(!result)
+    if(ui_is_sleeping())
     {
-        log_warning("Failed to request outside climate data fetch");
-    }
-
-    result = request_data_fetch(FETCH_SMART_SOLAR);
-    if(!result)
-    {
-        log_warning("Failed to request smart_solar data fetch");
-    }
-
-    result = request_data_fetch(FETCH_SMART_SHUNT);
-    if(!result)
-    {
-        log_warning("Failed to request smart_shunt data fetch");
+        return;
     }
 
     climate_sensor_t* inside_climate  = get_inside_climate_data();
@@ -207,32 +226,48 @@ static void update_camper_timer_cb(lv_timer_t* timer)
 
 static void update_long_timer_cb(lv_timer_t* timer)
 {
-    static history_state_t fetch_state = HISTORY_TEMP_INSIDE;
+    static history_state_t fetch_state      = HISTORY_TEMP_INSIDE;
+    static uint32_t        last_update_time = 0;
+    uint32_t               current_time     = lv_tick_get();
+
+    // Skip update if not enough time has passed since last update
+    if(last_update_time != 0 && current_time - last_update_time < 5 * 60 * 1000)
+    {
+        // pass
+    }
+    else
+    {
+        if(fetch_state == HISTORY_TEMP_INSIDE)
+        {
+            if(request_entity_history("inside", "temperature", "1h", 48))
+                fetch_state = HISTORY_TEMP_OUTSIDE;
+        }
+        else if(fetch_state == HISTORY_TEMP_OUTSIDE)
+        {
+            if(request_entity_history("outside", "temperature", "1h", 48))
+                fetch_state = HISTORY_TEMP_SOLAR;
+        }
+        else if(fetch_state == HISTORY_TEMP_SOLAR)
+        {
+            if(request_entity_history("SmartSolar", "yield_today", "1h", 49))
+                fetch_state = HISTORY_TEMP_BATTERY;
+        }
+        else if(fetch_state == HISTORY_TEMP_BATTERY)
+        {
+            if(request_entity_history("SmartShunt", "consumed_ah", "1h", 49))
+            {
+                // Update the timestamp
+                // FIXME: Not perfect when a request fails, but good enough for now
+                last_update_time = current_time;
+
+                fetch_state = HISTORY_TEMP_INSIDE;
+            }
+        }
+    }
 
     if(ui_is_sleeping())
     {
         return;
-    }
-
-    if(fetch_state == HISTORY_TEMP_INSIDE)
-    {
-        if(request_entity_history("inside", "temperature", "1h", 48))
-            fetch_state = HISTORY_TEMP_OUTSIDE;
-    }
-    else if(fetch_state == HISTORY_TEMP_OUTSIDE)
-    {
-        if(request_entity_history("outside", "temperature", "1h", 48))
-            fetch_state = HISTORY_TEMP_SOLAR;
-    }
-    else if(fetch_state == HISTORY_TEMP_SOLAR)
-    {
-        if(request_entity_history("SmartSolar", "yield_today", "1h", 49))
-            fetch_state = HISTORY_TEMP_BATTERY;
-    }
-    else if(fetch_state == HISTORY_TEMP_BATTERY)
-    {
-        if(request_entity_history("SmartShunt", "consumed_ah", "1h", 49))
-            fetch_state = HISTORY_TEMP_INSIDE;
     }
 
     // Check if historical data is available

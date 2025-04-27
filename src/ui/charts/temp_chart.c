@@ -10,16 +10,17 @@
 #include "../ui.h"
 #include "../../main.h"
 
+#define TEMP_CHART_POINTS 48
+
 static lv_chart_series_t* internal_temp_series = NULL;
 static lv_chart_series_t* external_temp_series = NULL;
 static lv_obj_t*          chart                = NULL;
 
 // Add static variables to store temperature history data
-static int32_t internal_temp_data[48] = {0};
-static int32_t external_temp_data[48] = {0};
-static int     temp_data_count        = 0;
-static bool    internal_data_valid    = false;
-static bool    external_data_valid    = false;
+static int32_t internal_temp_data[TEMP_CHART_POINTS] = {0};
+static int32_t external_temp_data[TEMP_CHART_POINTS] = {0};
+static bool    internal_data_valid                   = false;
+static bool    external_data_valid                   = false;
 
 // Add static variables for climate chart min/max lines and labels
 static lv_obj_t* internal_max_line  = NULL;
@@ -57,8 +58,7 @@ void initialize_temperature_chart(lv_obj_t* chart_container)
     // Set proper number of division lines for temperature scale
     lv_chart_set_div_line_count(chart, 4, 7); // 4 horizontal lines = 5 sections (0,10,20,30,40)
 
-    // Set point count - 48 hours
-    lv_chart_set_point_count(chart, 48); // 48 data points (hourly for past 48 hours)
+    lv_chart_set_point_count(chart, TEMP_CHART_POINTS);
 
     // Add data series for internal and external temperatures
     internal_temp_series = lv_chart_add_series(chart, lv_palette_main(LV_PALETTE_GREEN),
@@ -69,7 +69,6 @@ void initialize_temperature_chart(lv_obj_t* chart_container)
     // Initialize data validity flags
     internal_data_valid = false;
     external_data_valid = false;
-    temp_data_count     = 0;
 
     lv_chart_refresh(chart); // Required after direct set
 }
@@ -196,7 +195,6 @@ void temp_chart_cleanup(void)
     // Reset data validity flags
     internal_data_valid = false;
     external_data_valid = false;
-    temp_data_count     = 0;
 
     log_debug("Temperature chart cleaned up");
 }
@@ -205,6 +203,11 @@ void temp_chart_cleanup(void)
 void update_climate_chart_with_history(entity_history_t* history_data, bool is_internal)
 {
     int data_count = history_data->count;
+    if(data_count > TEMP_CHART_POINTS)
+    {
+        data_count = TEMP_CHART_POINTS;
+        log_warning("Data count is %d, capping to %d", history_data->count, TEMP_CHART_POINTS);
+    }
     if(chart == NULL || history_data->mean == NULL || data_count <= 0)
     {
         if(is_internal)
@@ -231,13 +234,12 @@ void update_climate_chart_with_history(entity_history_t* history_data, bool is_i
         }
 
         // Fill remaining elements with LV_CHART_POINT_NONE
-        for(int i = data_count; i < 48; i++)
+        for(int i = data_count; i < TEMP_CHART_POINTS; i++)
         {
             internal_temp_data[i] = LV_CHART_POINT_NONE;
         }
 
         internal_data_valid = true;
-        temp_data_count     = data_count;
     }
     else
     {
@@ -248,21 +250,19 @@ void update_climate_chart_with_history(entity_history_t* history_data, bool is_i
         }
 
         // Fill remaining elements with LV_CHART_POINT_NONE
-        for(int i = data_count; i < 48; i++)
+        for(int i = data_count; i < TEMP_CHART_POINTS; i++)
         {
             external_temp_data[i] = LV_CHART_POINT_NONE;
         }
 
         external_data_valid = true;
-        if(temp_data_count < data_count)
-            temp_data_count = data_count;
     }
 
     // Refresh chart if at least one data source is valid
     if(internal_data_valid || external_data_valid)
     {
-        log_debug("Refreshing climate chart with internal=%d, external=%d, count=%d",
-                  internal_data_valid, external_data_valid, temp_data_count);
+        log_debug("Refreshing climate chart with internal=%d, external=%d", internal_data_valid,
+                  external_data_valid);
         refresh_climate_chart();
     }
 }
@@ -278,15 +278,8 @@ void refresh_climate_chart(void)
     }
 
     // Continue with existing refresh logic if at least one source is valid
-    if(chart == NULL || temp_data_count == 0)
+    if(chart == NULL)
         return;
-
-    // Safety check - ensure temp_data_count is reasonable
-    if(temp_data_count > 48)
-    {
-        temp_data_count = 48;
-        log_warning("Temperature data count was too high, capped at 48");
-    }
 
     // Clear existing data
     if(internal_temp_series != NULL)
@@ -328,7 +321,7 @@ void refresh_climate_chart(void)
     // Consider internal temperature values if valid
     if(internal_data_valid)
     {
-        for(int i = 0; i < temp_data_count; i++)
+        for(int i = 0; i < TEMP_CHART_POINTS; i++)
         {
             // Skip invalid/no-data points
             if(internal_temp_data[i] == LV_CHART_POINT_NONE)
@@ -349,7 +342,7 @@ void refresh_climate_chart(void)
     // Consider external temperature values if valid
     if(external_data_valid)
     {
-        for(int i = 0; i < temp_data_count; i++)
+        for(int i = 0; i < TEMP_CHART_POINTS; i++)
         {
             // Skip invalid/no-data points
             if(external_temp_data[i] == LV_CHART_POINT_NONE)
@@ -390,34 +383,24 @@ void refresh_climate_chart(void)
     cleanup_temperature_chart_lines_and_labels();
 
     // Fill chart with available data
-    for(int i = 0; i < point_count && i < temp_data_count; i++)
+    for(int i = 0; i < point_count && i < TEMP_CHART_POINTS; i++)
     {
         // Convert data from history to chart format
         // History data typically comes newest first, so we reverse it
-        int idx = temp_data_count - i - 1;
+        int idx = TEMP_CHART_POINTS - i - 1;
         if(idx >= 0)
         {
             // Internal temperature if valid
             if(internal_data_valid)
-            {
-                // No need for conversion, it's already in fixed point format
                 lv_chart_set_next_value(chart, internal_temp_series, internal_temp_data[idx]);
-            }
             else
-            {
                 lv_chart_set_next_value(chart, internal_temp_series, LV_CHART_POINT_NONE);
-            }
 
             // External temperature if valid
             if(external_data_valid)
-            {
-                // No need for conversion, it's already in fixed point format
                 lv_chart_set_next_value(chart, external_temp_series, external_temp_data[idx]);
-            }
             else
-            {
                 lv_chart_set_next_value(chart, external_temp_series, LV_CHART_POINT_NONE);
-            }
         }
     }
 
@@ -446,20 +429,11 @@ void refresh_climate_chart(void)
         internal_max_line =
             create_temperature_line(chart, "internal max line", lv_palette_main(LV_PALETTE_GREEN),
                                     internal_max_line_points);
-        if(internal_max_line == NULL)
-        {
-            return;
-        }
 
-        // Add max value label for internal temperature using helper function (pass fixed point
-        // value)
+        // Add max value label for internal temperature using helper function
         internal_max_label =
             create_temperature_label(chart, "internal max label", lv_palette_main(LV_PALETTE_GREEN),
                                      internal_max_temp, LV_ALIGN_TOP_LEFT, 5, -8);
-        if(internal_max_label == NULL)
-        {
-            return;
-        }
     }
 
     if(external_data_valid && external_max_temp > -1000)
@@ -477,20 +451,11 @@ void refresh_climate_chart(void)
         // Create max line for external temperature using helper function
         external_max_line = create_temperature_line(
             chart, "external max line", lv_palette_main(LV_PALETTE_BLUE), external_max_line_points);
-        if(external_max_line == NULL)
-        {
-            return;
-        }
 
-        // Add max value label for external temperature using helper function (pass fixed point
-        // value)
+        // Add max value label for external temperature using helper function
         external_max_label =
             create_temperature_label(chart, "external max label", lv_palette_main(LV_PALETTE_BLUE),
                                      external_max_temp, LV_ALIGN_TOP_RIGHT, -5, -8);
-        if(external_max_label == NULL)
-        {
-            return;
-        }
     }
 
     // Add min value lines and labels for valid series
@@ -510,20 +475,11 @@ void refresh_climate_chart(void)
         internal_min_line =
             create_temperature_line(chart, "internal min line", lv_palette_main(LV_PALETTE_GREEN),
                                     internal_min_line_points);
-        if(internal_min_line == NULL)
-        {
-            return;
-        }
 
-        // Add min value label for internal temperature using helper function (pass fixed point
-        // value)
+        // Add min value label for internal temperature using helper function
         internal_min_label =
             create_temperature_label(chart, "internal min label", lv_palette_main(LV_PALETTE_GREEN),
                                      internal_min_temp, LV_ALIGN_BOTTOM_LEFT, 5, 10);
-        if(internal_min_label == NULL)
-        {
-            return;
-        }
     }
 
     if(external_data_valid && external_min_temp < 1000)
@@ -541,13 +497,8 @@ void refresh_climate_chart(void)
         // Create min line for external temperature using helper function
         external_min_line = create_temperature_line(
             chart, "external min line", lv_palette_main(LV_PALETTE_BLUE), external_min_line_points);
-        if(external_min_line == NULL)
-        {
-            return;
-        }
 
-        // Add min value label for external temperature using helper function (pass fixed point
-        // value)
+        // Add min value label for external temperature using helper function
         external_min_label =
             create_temperature_label(chart, "external min label", lv_palette_main(LV_PALETTE_BLUE),
                                      external_min_temp, LV_ALIGN_BOTTOM_RIGHT, -5, 10);
@@ -563,8 +514,7 @@ void refresh_climate_chart(void)
     // Convert to float for logging
     float min_temp = min_temp_overall / 10.0f;
     float max_temp = max_temp_overall / 10.0f;
-    log_debug("Climate chart updated with %d temperature points (range: %.1f-%.1f°C)",
-              temp_data_count, min_temp, max_temp);
+    log_debug("Climate chart updated (range: %.1f-%.1f°C)", min_temp, max_temp);
 }
 
 // Reset the chart if data is invalid
@@ -587,7 +537,6 @@ void reset_climate_chart(void)
     // Reset data validity flags
     internal_data_valid = false;
     external_data_valid = false;
-    temp_data_count     = 0;
 
     log_debug("Climate chart reset completely");
 }
