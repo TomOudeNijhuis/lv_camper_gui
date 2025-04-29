@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <math.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "lvgl/lvgl.h"
 #include "battery_chart.h"
@@ -18,7 +19,48 @@ static lv_obj_t*          energy_max_line  = NULL;
 static lv_obj_t*          energy_max_label = NULL;
 static lv_point_precise_t energy_max_line_points[2];
 
-// Add a new function to clean up all chart lines and labels
+// Add static variables for timestamp display
+static char      first_timestamp[32] = {0};
+static char      last_timestamp[32]  = {0};
+static lv_obj_t* start_time_label    = NULL;
+static lv_obj_t* end_time_label      = NULL;
+static bool      timestamps_valid    = false;
+
+// Format timestamp to display date and time
+static void format_chart_timestamp(const char* iso_timestamp, char* output, size_t output_size)
+{
+    if(iso_timestamp == NULL || output == NULL ||
+       output_size < 12) // Need more space for DD-MM HH:MM
+    {
+        strcpy(output, "");
+        return;
+    }
+
+    // ISO format: YYYY-MM-DDThh:mm:ss
+    if(strlen(iso_timestamp) >= 16 && iso_timestamp[4] == '-' && iso_timestamp[7] == '-' &&
+       iso_timestamp[10] == 'T')
+    {
+        // Extract day (positions 8-9)
+        char day[3] = {iso_timestamp[8], iso_timestamp[9], '\0'};
+
+        // Extract month (positions 5-6)
+        char month[3] = {iso_timestamp[5], iso_timestamp[6], '\0'};
+
+        // Extract time (positions 11-16 for HH:MM)
+        char time[6] = {iso_timestamp[11], iso_timestamp[12], ':',
+                        iso_timestamp[14], iso_timestamp[15], '\0'};
+
+        // Format as "DD-MM HH:MM"
+        snprintf(output, output_size, "%s-%s %s", day, month, time);
+    }
+    else
+    {
+        // Fallback if timestamp isn't in expected format
+        strncpy(output, iso_timestamp, output_size - 1);
+        output[output_size - 1] = '\0';
+    }
+}
+
 static void cleanup_energy_chart_lines_and_labels(void)
 {
     if(energy_max_line != NULL)
@@ -34,7 +76,6 @@ static void cleanup_energy_chart_lines_and_labels(void)
     }
 }
 
-// Add a function to safely create a line with error handling
 static lv_obj_t* create_energy_line(lv_obj_t* parent, const char* line_name, lv_color_t color,
                                     lv_point_precise_t* points)
 {
@@ -60,7 +101,6 @@ static lv_obj_t* create_energy_line(lv_obj_t* parent, const char* line_name, lv_
     return line;
 }
 
-// Add a function to safely create a label with error handling
 static lv_obj_t* create_energy_label(lv_obj_t* parent, const char* label_name, lv_color_t color,
                                      float value, lv_align_t alignment, lv_coord_t x_offset,
                                      lv_coord_t y_offset)
@@ -113,7 +153,20 @@ void initialize_energy_chart(lv_obj_t* chart_container)
     // Set the chart type to bar
     lv_chart_set_type(energy_chart, LV_CHART_TYPE_BAR);
 
-    lv_chart_refresh(energy_chart); // Force refresh after all points are set
+    // Create timestamp labels for the chart timeline
+    start_time_label = lv_label_create(chart_container);
+    lv_obj_set_style_text_font(start_time_label, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(start_time_label, lv_palette_main(LV_PALETTE_GREY), 0);
+    lv_obj_align(start_time_label, LV_ALIGN_BOTTOM_LEFT, 5, 0);
+    lv_label_set_text(start_time_label, "");
+
+    end_time_label = lv_label_create(chart_container);
+    lv_obj_set_style_text_font(end_time_label, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(end_time_label, lv_palette_main(LV_PALETTE_GREY), 0);
+    lv_obj_align(end_time_label, LV_ALIGN_BOTTOM_RIGHT, -5, 0);
+    lv_label_set_text(end_time_label, "");
+
+    lv_chart_refresh(energy_chart); // Required after direct set
 }
 
 bool update_energy_chart_with_history(entity_history_t* history_data)
@@ -216,6 +269,52 @@ bool update_energy_chart_with_history(entity_history_t* history_data)
             }
         }
 
+        // Extract timestamps from history data for timeline display
+        if(history_data->timestamps != NULL && data_count > 0)
+        {
+            // First timestamp is oldest data (array is in reverse chronological order)
+            strncpy(first_timestamp, history_data->timestamps[data_count - 1],
+                    sizeof(first_timestamp) - 1);
+            // Last timestamp is newest data (index 0)
+            strncpy(last_timestamp, history_data->timestamps[0], sizeof(last_timestamp) - 1);
+            first_timestamp[sizeof(first_timestamp) - 1] = '\0';
+            last_timestamp[sizeof(last_timestamp) - 1]   = '\0';
+            timestamps_valid                             = true;
+        }
+
+        // Update timestamp labels if we have valid timestamps
+        if(timestamps_valid)
+        {
+            char formatted_start[16] = {0};
+            char formatted_end[16]   = {0};
+
+            format_chart_timestamp(first_timestamp, formatted_start, sizeof(formatted_start));
+            format_chart_timestamp(last_timestamp, formatted_end, sizeof(formatted_end));
+
+            if(start_time_label != NULL)
+            {
+                lv_label_set_text(start_time_label, formatted_start);
+            }
+
+            if(end_time_label != NULL)
+            {
+                lv_label_set_text(end_time_label, formatted_end);
+            }
+        }
+        else
+        {
+            // Reset to empty if no valid timestamps
+            if(start_time_label != NULL)
+            {
+                lv_label_set_text(start_time_label, "");
+            }
+
+            if(end_time_label != NULL)
+            {
+                lv_label_set_text(end_time_label, "");
+            }
+        }
+
         // Refresh the chart to show new data
         lv_chart_refresh(energy_chart);
 
@@ -229,6 +328,24 @@ void battery_chart_cleanup(void)
 {
     // Use the dedicated cleanup function instead of repeating code
     cleanup_energy_chart_lines_and_labels();
+
+    // Clean up timestamp labels
+    if(start_time_label != NULL)
+    {
+        lv_obj_del(start_time_label);
+        start_time_label = NULL;
+    }
+
+    if(end_time_label != NULL)
+    {
+        lv_obj_del(end_time_label);
+        end_time_label = NULL;
+    }
+
+    // Reset timestamps
+    timestamps_valid   = false;
+    first_timestamp[0] = '\0';
+    last_timestamp[0]  = '\0';
 
     // Note: chart and series will be deleted by LVGL when their parent is deleted
     energy_chart         = NULL;

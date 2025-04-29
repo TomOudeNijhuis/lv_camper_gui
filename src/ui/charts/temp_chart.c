@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <math.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "lvgl/lvgl.h"
 #include "temp_chart.h"
@@ -37,6 +38,13 @@ static lv_point_precise_t internal_max_line_points[2];
 static lv_point_precise_t external_max_line_points[2];
 static lv_point_precise_t external_min_line_points[2];
 
+// Add static variables for timestamp display
+static char      first_timestamp[32] = {0};
+static char      last_timestamp[32]  = {0};
+static lv_obj_t* start_time_label    = NULL;
+static lv_obj_t* end_time_label      = NULL;
+static bool      timestamps_valid    = false;
+
 void initialize_temperature_chart(lv_obj_t* chart_container)
 {
     chart = lv_chart_create(chart_container);
@@ -70,7 +78,55 @@ void initialize_temperature_chart(lv_obj_t* chart_container)
     internal_data_valid = false;
     external_data_valid = false;
 
+    // Create timestamp labels for the chart timeline
+    start_time_label = lv_label_create(chart_container);
+    lv_obj_set_style_text_font(start_time_label, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(start_time_label, lv_palette_main(LV_PALETTE_GREY), 0);
+    lv_obj_align(start_time_label, LV_ALIGN_BOTTOM_LEFT, 5, 0);
+    lv_label_set_text(start_time_label, "");
+
+    end_time_label = lv_label_create(chart_container);
+    lv_obj_set_style_text_font(end_time_label, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(end_time_label, lv_palette_main(LV_PALETTE_GREY), 0);
+    lv_obj_align(end_time_label, LV_ALIGN_BOTTOM_RIGHT, -5, 0);
+    lv_label_set_text(end_time_label, "");
+
     lv_chart_refresh(chart); // Required after direct set
+}
+
+// Update function to format timestamp with date
+static void format_chart_timestamp(const char* iso_timestamp, char* output, size_t output_size)
+{
+    if(iso_timestamp == NULL || output == NULL ||
+       output_size < 12) // Need more space for DD-MM HH:MM
+    {
+        strcpy(output, "");
+        return;
+    }
+
+    // ISO format: YYYY-MM-DDThh:mm:ss
+    if(strlen(iso_timestamp) >= 16 && iso_timestamp[4] == '-' && iso_timestamp[7] == '-' &&
+       iso_timestamp[10] == 'T')
+    {
+        // Extract day (positions 8-9)
+        char day[3] = {iso_timestamp[8], iso_timestamp[9], '\0'};
+
+        // Extract month (positions 5-6)
+        char month[3] = {iso_timestamp[5], iso_timestamp[6], '\0'};
+
+        // Extract time (positions 11-16 for HH:MM)
+        char time[6] = {iso_timestamp[11], iso_timestamp[12], ':',
+                        iso_timestamp[14], iso_timestamp[15], '\0'};
+
+        // Format as "DD-MM HH:MM"
+        snprintf(output, output_size, "%s-%s %s", day, month, time);
+    }
+    else
+    {
+        // Fallback if timestamp isn't in expected format
+        strncpy(output, iso_timestamp, output_size - 1);
+        output[output_size - 1] = '\0';
+    }
 }
 
 // Add a new function to clean up all chart lines and labels
@@ -187,6 +243,19 @@ void temp_chart_cleanup(void)
     // Use the dedicated cleanup function instead of repeating code
     cleanup_temperature_chart_lines_and_labels();
 
+    // Clean up timestamp labels
+    if(start_time_label != NULL)
+    {
+        lv_obj_del(start_time_label);
+        start_time_label = NULL;
+    }
+
+    if(end_time_label != NULL)
+    {
+        lv_obj_del(end_time_label);
+        end_time_label = NULL;
+    }
+
     // Note: chart and series will be deleted by LVGL when their parent is deleted
     chart                = NULL;
     internal_temp_series = NULL;
@@ -195,6 +264,9 @@ void temp_chart_cleanup(void)
     // Reset data validity flags
     internal_data_valid = false;
     external_data_valid = false;
+    timestamps_valid    = false;
+    first_timestamp[0]  = '\0';
+    last_timestamp[0]   = '\0';
 
     log_debug("Temperature chart cleaned up");
 }
@@ -222,6 +294,19 @@ void update_climate_chart_with_history(entity_history_t* history_data, bool is_i
 
         log_warning("Invalid climate chart data received, skipping update");
         return;
+    }
+
+    // Extract timestamps from history data (only need to do this once, using internal data)
+    if(is_internal && history_data->timestamps != NULL && data_count > 0)
+    {
+        // First timestamp is oldest data (array is in reverse chronological order)
+        strncpy(first_timestamp, history_data->timestamps[data_count - 1],
+                sizeof(first_timestamp) - 1);
+        // Last timestamp is newest data (index 0)
+        strncpy(last_timestamp, history_data->timestamps[0], sizeof(last_timestamp) - 1);
+        first_timestamp[sizeof(first_timestamp) - 1] = '\0';
+        last_timestamp[sizeof(last_timestamp) - 1]   = '\0';
+        timestamps_valid                             = true;
     }
 
     // Copy mean values to appropriate array
@@ -508,6 +593,39 @@ void refresh_climate_chart(void)
         }
     }
 
+    // Update timestamp labels if we have valid timestamps
+    if(timestamps_valid)
+    {
+        char formatted_start[16] = {0};
+        char formatted_end[16]   = {0};
+
+        format_chart_timestamp(first_timestamp, formatted_start, sizeof(formatted_start));
+        format_chart_timestamp(last_timestamp, formatted_end, sizeof(formatted_end));
+
+        if(start_time_label != NULL)
+        {
+            lv_label_set_text(start_time_label, formatted_start);
+        }
+
+        if(end_time_label != NULL)
+        {
+            lv_label_set_text(end_time_label, formatted_end);
+        }
+    }
+    else
+    {
+        // Reset to placeholder if no valid timestamps
+        if(start_time_label != NULL)
+        {
+            lv_label_set_text(start_time_label, "");
+        }
+
+        if(end_time_label != NULL)
+        {
+            lv_label_set_text(end_time_label, "");
+        }
+    }
+
     // Refresh the chart to show new data
     lv_chart_refresh(chart);
 
@@ -533,6 +651,22 @@ void reset_climate_chart(void)
 
     // Use the dedicated cleanup function for lines and labels
     cleanup_temperature_chart_lines_and_labels();
+
+    // Reset timestamp labels
+    if(start_time_label != NULL)
+    {
+        lv_label_set_text(start_time_label, "");
+    }
+
+    if(end_time_label != NULL)
+    {
+        lv_label_set_text(end_time_label, "");
+    }
+
+    // Reset timestamp validity
+    timestamps_valid   = false;
+    first_timestamp[0] = '\0';
+    last_timestamp[0]  = '\0';
 
     // Reset data validity flags
     internal_data_valid = false;
