@@ -147,8 +147,8 @@ void initialize_energy_chart(lv_obj_t* chart_container)
     lv_chart_set_range(energy_chart, LV_CHART_AXIS_PRIMARY_Y, 0, 200); // 0-20 Ah (x10)
 
     // Add data series for hourly energy
-    hourly_energy_series =
-        lv_chart_add_series(energy_chart, lv_palette_main(LV_PALETTE_RED), LV_CHART_AXIS_PRIMARY_Y);
+    hourly_energy_series = lv_chart_add_series(energy_chart, lv_palette_main(LV_PALETTE_ORANGE),
+                                               LV_CHART_AXIS_PRIMARY_Y);
 
     // Set the chart type to bar
     lv_chart_set_type(energy_chart, LV_CHART_TYPE_BAR);
@@ -235,7 +235,7 @@ bool update_energy_chart_with_history(entity_history_t* history_data)
         energy_max_line_points[1].y = max_y_pos;
 
         energy_max_line =
-            create_energy_line(energy_chart, "energy max line", lv_palette_main(LV_PALETTE_RED),
+            create_energy_line(energy_chart, "energy max line", lv_palette_main(LV_PALETTE_ORANGE),
                                energy_max_line_points);
         if(energy_max_line == NULL)
         {
@@ -243,9 +243,9 @@ bool update_energy_chart_with_history(entity_history_t* history_data)
         }
 
         // Add max value label using helper function
-        energy_max_label =
-            create_energy_label(energy_chart, "energy max label", lv_palette_main(LV_PALETTE_RED),
-                                max_ah_change, LV_ALIGN_TOP_LEFT, 5, -8);
+        energy_max_label = create_energy_label(energy_chart, "energy max label",
+                                               lv_palette_main(LV_PALETTE_ORANGE), max_ah_change,
+                                               LV_ALIGN_TOP_LEFT, 5, -8);
         if(energy_max_label == NULL)
         {
             return false;

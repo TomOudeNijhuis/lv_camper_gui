@@ -144,8 +144,9 @@ bool parse_smart_shunt(const char* json_str, smart_shunt_t* shunt_data)
     // Create a temporary shunt data structure
     smart_shunt_t temp_shunt = {0};
 
-    // Counter for required fields
-    int field_count = 0;
+    // Counter for processed fields and array to track processed entities
+    int  field_count             = 0;
+    char processed_entities[256] = {0}; // Buffer to store processed entity names
 
     // Iterate through entities in the array
     int array_len = json_object_array_length(parsed_json);
@@ -168,26 +169,41 @@ bool parse_smart_shunt(const char* json_str, smart_shunt_t* shunt_data)
         {
             temp_shunt.voltage = atof(state_str);
             field_count++;
+            if(strlen(processed_entities) > 0)
+                strcat(processed_entities, ", ");
+            strcat(processed_entities, entity_name);
         }
         else if(strcmp(entity_name, "current") == 0)
         {
             temp_shunt.current = atof(state_str);
             field_count++;
+            if(strlen(processed_entities) > 0)
+                strcat(processed_entities, ", ");
+            strcat(processed_entities, entity_name);
         }
         else if(strcmp(entity_name, "remaining_mins") == 0)
         {
             temp_shunt.remaining_mins = atoi(state_str);
             field_count++;
+            if(strlen(processed_entities) > 0)
+                strcat(processed_entities, ", ");
+            strcat(processed_entities, entity_name);
         }
         else if(strcmp(entity_name, "soc") == 0)
         {
             temp_shunt.soc = atof(state_str);
             field_count++;
+            if(strlen(processed_entities) > 0)
+                strcat(processed_entities, ", ");
+            strcat(processed_entities, entity_name);
         }
         else if(strcmp(entity_name, "consumed_ah") == 0)
         {
             temp_shunt.consumed_ah = atof(state_str);
             field_count++;
+            if(strlen(processed_entities) > 0)
+                strcat(processed_entities, ", ");
+            strcat(processed_entities, entity_name);
         }
         else
         {
@@ -195,12 +211,11 @@ bool parse_smart_shunt(const char* json_str, smart_shunt_t* shunt_data)
         }
     }
 
-    // Check if we found at least 5 required fields
+    // Check if we found fewer than 5 required fields and warn
     if(field_count < 5)
     {
-        log_error("Smart shunt data must contain at least 5 fields, json contains %d", field_count);
-        json_object_put(parsed_json);
-        return false;
+        log_warning("Smart shunt data contains only %d fields (expected 5). Processed entities: %s",
+                    field_count, processed_entities);
     }
 
     // Copy the temp structure to the output parameter

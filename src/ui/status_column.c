@@ -29,6 +29,7 @@ static lv_obj_t*   ui_household_battery        = NULL;
 static lv_obj_t*   ui_household_battery_needle = NULL;
 static lv_obj_t*   ui_wifi_icon                = NULL; // Wi-Fi signal icon
 static lv_obj_t*   ui_wifi_label               = NULL; // Wi-Fi SSID label
+static lv_obj_t*   ui_wifi_ip_label            = NULL; // Wi-Fi IP address label
 static lv_obj_t*   ui_wifi_strength            = NULL; // Wi-Fi signal strength
 static lv_timer_t* update_timer                = NULL;
 
@@ -282,7 +283,7 @@ static lv_obj_t* create_wifi_status(lv_obj_t* parent)
 {
     // Create container for Wi-Fi status
     lv_obj_t* wifi_container = lv_obj_create(parent);
-    lv_obj_set_size(wifi_container, lv_pct(100), 45); // Reduced from 60 to 45
+    lv_obj_set_size(wifi_container, lv_pct(100), 45);
     lv_obj_set_style_pad_all(wifi_container, 5, 0);
     lv_obj_set_style_border_width(wifi_container, 0, 0);
     lv_obj_set_style_bg_opa(wifi_container, LV_OPA_TRANSP, 0);
@@ -296,13 +297,21 @@ static lv_obj_t* create_wifi_status(lv_obj_t* parent)
     ui_wifi_icon = lv_label_create(wifi_container);
     lv_label_set_text(ui_wifi_icon, LV_SYMBOL_WIFI);
     lv_obj_set_style_text_font(ui_wifi_icon, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(ui_wifi_icon, lv_color_hex(0x808080), 0); // Default to gray
+    lv_obj_set_style_text_color(ui_wifi_icon, lv_color_hex(0x808080), 0);
 
     // Create Wi-Fi SSID label
     ui_wifi_label = lv_label_create(wifi_container);
     lv_label_set_text(ui_wifi_label, "Not connected");
     lv_obj_set_style_text_font(ui_wifi_label, &lv_font_montserrat_16, 0);
     lv_obj_set_style_pad_left(ui_wifi_label, 10, 0);
+    lv_obj_set_flex_grow(ui_wifi_label, 1);
+
+    // Create IP address label
+    ui_wifi_ip_label = lv_label_create(wifi_container);
+    lv_label_set_text(ui_wifi_ip_label, "");
+    lv_obj_set_style_text_font(ui_wifi_ip_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_align(ui_wifi_ip_label, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_style_pad_left(ui_wifi_ip_label, 10, 0);
 
     // Create signal strength label - make it grow to push it to the right
     ui_wifi_strength = lv_label_create(wifi_container);
@@ -622,6 +631,21 @@ void update_status_ui(camper_sensor_t* camper_data)
 
             // Update SSID and signal strength
             lv_label_set_text(ui_wifi_label, wifi_status.wifi_ssid);
+
+            // Update IP address (if available)
+            if(ui_wifi_ip_label)
+            {
+                if(strlen(wifi_status.wifi_ip_address) > 0)
+                {
+                    lv_label_set_text(ui_wifi_ip_label, wifi_status.wifi_ip_address);
+                    lv_obj_clear_flag(ui_wifi_ip_label, LV_OBJ_FLAG_HIDDEN);
+                }
+                else
+                {
+                    lv_obj_add_flag(ui_wifi_ip_label, LV_OBJ_FLAG_HIDDEN);
+                }
+            }
+
             lv_label_set_text_fmt(ui_wifi_strength, "%d%%", wifi_status.wifi_signal_strength);
         }
         else
@@ -629,6 +653,13 @@ void update_status_ui(camper_sensor_t* camper_data)
             // Not connected
             lv_obj_set_style_text_color(ui_wifi_icon, lv_color_hex(0x808080), 0); // Gray
             lv_label_set_text(ui_wifi_label, "Not connected");
+
+            // Hide IP address when not connected
+            if(ui_wifi_ip_label)
+            {
+                lv_obj_add_flag(ui_wifi_ip_label, LV_OBJ_FLAG_HIDDEN);
+            }
+
             lv_label_set_text(ui_wifi_strength, "");
         }
     }

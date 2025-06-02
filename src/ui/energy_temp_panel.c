@@ -231,7 +231,7 @@ static void update_long_timer_cb(lv_timer_t* timer)
     uint32_t               current_time     = lv_tick_get();
 
     // Skip update if not enough time has passed since last update
-    if(last_update_time != 0 && current_time - last_update_time < 5 * 60 * 1000)
+    if(last_update_time != 0 && current_time - last_update_time < 15 * 60 * 1000)
     {
         // pass
     }
@@ -263,11 +263,6 @@ static void update_long_timer_cb(lv_timer_t* timer)
                 fetch_state = HISTORY_TEMP_INSIDE;
             }
         }
-    }
-
-    if(ui_is_sleeping())
-    {
-        return;
     }
 
     // Check if historical data is available
@@ -335,6 +330,7 @@ void create_temperature_container(lv_obj_t* right_column)
 
     lv_obj_t* internal_caption = lv_label_create(labels_column);
     lv_label_set_text(internal_caption, "Internal");
+    lv_obj_set_style_text_color(internal_caption, lv_palette_main(LV_PALETTE_GREEN), 0);
 
     // Internal temperature value with larger font
     internal_temp_label = lv_label_create(labels_column);
@@ -354,6 +350,7 @@ void create_temperature_container(lv_obj_t* right_column)
     // External temperature caption
     lv_obj_t* external_caption = lv_label_create(labels_column);
     lv_label_set_text(external_caption, "External");
+    lv_obj_set_style_text_color(external_caption, lv_palette_main(LV_PALETTE_BLUE), 0);
 
     // External temperature value with larger font
     external_temp_label = lv_label_create(labels_column);
@@ -414,7 +411,8 @@ void create_energy_container(lv_obj_t* right_column)
 
     // Caption label
     lv_obj_t* power_caption = lv_label_create(power_column);
-    lv_label_set_text(power_caption, "Power");
+    lv_label_set_text(power_caption, "Bat Power");
+    lv_obj_set_style_text_color(power_caption, lv_palette_main(LV_PALETTE_ORANGE), 0);
 
     // Battery power value label
     power_label = lv_label_create(power_column);
@@ -432,6 +430,7 @@ void create_energy_container(lv_obj_t* right_column)
     // Caption label
     lv_obj_t* status_caption = lv_label_create(power_column);
     lv_label_set_text(status_caption, "Status");
+    lv_obj_set_style_text_color(status_caption, lv_palette_main(LV_PALETTE_ORANGE), 0);
 
     // Battery status value label
     battery_status_label = lv_label_create(power_column);
@@ -484,7 +483,8 @@ void create_solar_container(lv_obj_t* right_column)
 
     // Caption label
     lv_obj_t* power_caption = lv_label_create(power_column);
-    lv_label_set_text(power_caption, "Power");
+    lv_label_set_text(power_caption, "Solar Power");
+    lv_obj_set_style_text_color(power_caption, lv_palette_main(LV_PALETTE_PURPLE), 0);
 
     // Battery power value label
     solar_power_label = lv_label_create(power_column);

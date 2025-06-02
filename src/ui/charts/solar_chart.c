@@ -151,9 +151,8 @@ void initialize_solar_chart(lv_obj_t* chart_container)
 
     // Add data series for hourly energy
     solar_hourly_energy_series = lv_chart_add_series(
-        solar_energy_chart, lv_palette_main(LV_PALETTE_GREEN), LV_CHART_AXIS_PRIMARY_Y);
+        solar_energy_chart, lv_palette_main(LV_PALETTE_PURPLE), LV_CHART_AXIS_PRIMARY_Y);
 
-    // Create timestamp labels for the chart timeline
     start_time_label = lv_label_create(chart_container);
     lv_obj_set_style_text_font(start_time_label, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(start_time_label, lv_palette_main(LV_PALETTE_GREY), 0);
@@ -240,7 +239,7 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
 
         solar_max_line =
             create_solar_line(solar_energy_chart, "solar max line",
-                              lv_palette_main(LV_PALETTE_GREEN), solar_max_line_points);
+                              lv_palette_main(LV_PALETTE_PURPLE), solar_max_line_points);
         if(solar_max_line == NULL)
         {
             return false;
@@ -248,7 +247,7 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
 
         // Add max value label using helper function
         solar_max_label = create_solar_label(solar_energy_chart, "solar max label",
-                                             lv_palette_main(LV_PALETTE_GREEN), max_yield,
+                                             lv_palette_main(LV_PALETTE_PURPLE), max_yield,
                                              LV_ALIGN_TOP_LEFT, 5, -8);
         if(solar_max_label == NULL)
         {

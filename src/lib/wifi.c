@@ -17,6 +17,7 @@ void wifi_init(void)
     current_status.wifi_connected = false;
     strcpy(current_status.wifi_ssid, "");
     current_status.wifi_signal_strength = 0;
+    strcpy(current_status.wifi_ip_address, "");
 
     // Perform initial update
     wifi_update();
@@ -43,6 +44,45 @@ static int parse_signal_strength(const char* output)
         }
     }
     return 0;
+}
+
+// Parse IP address from ip addr output
+static void parse_ip_address(const char* interface, char* ip_addr, size_t max_len)
+{
+    if(!interface || strlen(interface) == 0)
+    {
+        strncpy(ip_addr, "", max_len);
+        return;
+    }
+
+    char cmd[128];
+    snprintf(cmd, sizeof(cmd),
+             "ip addr show dev %s | grep -w inet | awk '{print $2}' | cut -d/ -f1", interface);
+
+    FILE* fp = popen(cmd, "r");
+    if(fp)
+    {
+        char buffer[32] = {0};
+        if(fgets(buffer, sizeof(buffer) - 1, fp) != NULL)
+        {
+            // Remove trailing newline if present
+            size_t len = strlen(buffer);
+            if(len > 0 && buffer[len - 1] == '\n')
+            {
+                buffer[len - 1] = '\0';
+            }
+            strncpy(ip_addr, buffer, max_len - 1);
+        }
+        else
+        {
+            strncpy(ip_addr, "", max_len);
+        }
+        pclose(fp);
+    }
+    else
+    {
+        strncpy(ip_addr, "", max_len);
+    }
 }
 
 // Get the current Wi-Fi status
@@ -154,10 +194,15 @@ void wifi_update(void)
     {
         strncpy(current_status.wifi_ssid, ssid, sizeof(current_status.wifi_ssid) - 1);
         current_status.wifi_signal_strength = signal_strength;
+
+        // Get IP address for the connected interface
+        parse_ip_address(current_interface, current_status.wifi_ip_address,
+                         sizeof(current_status.wifi_ip_address));
     }
     else
     {
         strcpy(current_status.wifi_ssid, "");
         current_status.wifi_signal_strength = 0;
+        strcpy(current_status.wifi_ip_address, "");
     }
 }

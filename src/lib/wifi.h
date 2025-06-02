@@ -16,6 +16,7 @@ typedef struct
     bool wifi_connected;       // True if connected to a Wi-Fi network
     char wifi_ssid[64];        // Name of the connected Wi-Fi network
     int  wifi_signal_strength; // Signal strength as percentage (0-100%)
+    char wifi_ip_address[16];  // IP address of the Wi-Fi connection (IPv4)
 } wifi_status_t;
 
 /**
