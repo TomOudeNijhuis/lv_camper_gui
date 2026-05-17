@@ -349,6 +349,7 @@ void create_status_column(lv_obj_t* left_column)
     lv_obj_set_size(household_container, lv_pct(30), lv_pct(100));
     lv_obj_set_style_border_width(household_container, 0, 0);
     lv_obj_set_style_pad_all(household_container, 5, 0);
+    lv_obj_set_scrollbar_mode(household_container, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_flex_flow(household_container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(household_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
@@ -358,6 +359,7 @@ void create_status_column(lv_obj_t* left_column)
     lv_obj_set_style_text_font(household_label, &lv_font_montserrat_16, 0);
 
     lv_obj_t* household_switch = lv_switch_create(household_container);
+    lv_obj_set_size(household_switch, 70, 35);
     lv_obj_set_style_bg_color(household_switch, lv_color_hex(0x008800),
                               LV_PART_INDICATOR | LV_STATE_CHECKED);
     lv_obj_add_event_cb(household_switch, household_event_handler, LV_EVENT_VALUE_CHANGED, NULL);
@@ -370,6 +372,7 @@ void create_status_column(lv_obj_t* left_column)
     lv_obj_set_size(pump_container, lv_pct(30), lv_pct(100));
     lv_obj_set_style_border_width(pump_container, 0, 0);
     lv_obj_set_style_pad_all(pump_container, 5, 0);
+    lv_obj_set_scrollbar_mode(pump_container, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_flex_flow(pump_container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(pump_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
@@ -379,6 +382,7 @@ void create_status_column(lv_obj_t* left_column)
     lv_obj_set_style_text_font(pump_label, &lv_font_montserrat_16, 0);
 
     lv_obj_t* pump_switch = lv_switch_create(pump_container);
+    lv_obj_set_size(pump_switch, 70, 35);
     lv_obj_set_style_bg_color(pump_switch, lv_color_hex(0x008800),
                               LV_PART_INDICATOR | LV_STATE_CHECKED);
     lv_obj_add_event_cb(pump_switch, pump_event_handler, LV_EVENT_VALUE_CHANGED, NULL);
@@ -391,6 +395,7 @@ void create_status_column(lv_obj_t* left_column)
     lv_obj_set_size(mains_container, lv_pct(30), lv_pct(100));
     lv_obj_set_style_border_width(mains_container, 0, 0);
     lv_obj_set_style_pad_all(mains_container, 5, 0);
+    lv_obj_set_scrollbar_mode(mains_container, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_flex_flow(mains_container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(mains_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);

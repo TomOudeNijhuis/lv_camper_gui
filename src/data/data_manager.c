@@ -535,256 +535,140 @@ void clear_entity_history(entity_history_t* history)
     history->count = 0;
 }
 
+typedef bool (*parse_fn_t)(const char* body, void* out_data);
+
 /**
- * Internal function to fetch camper data from the server and update local state
+ * Shared fetch/parse/cache-write helper. GETs api_url, runs `parse` into `temp`,
+ * then under data_mutex either memcpy's temp into target (with valid_flag set true),
+ * or clears valid_flag on failure. Returns 0 on success, -1 on HTTP failure (parse
+ * failure also returns 0 but marks the target invalid - matches the pre-refactor
+ * behaviour of the four functions this replaces).
  */
+static int fetch_helper(const char* api_url, const char* what, parse_fn_t parse, void* temp,
+                        size_t temp_size, void* target, bool* valid_flag)
+{
+    http_response_t response = http_get(api_url, HTTP_TIMEOUT_SECONDS);
+
+    if(!response.success)
+    {
+        log_error("Failed to fetch %s data: %s", what, response.error);
+        if(response.body && *response.body)
+        {
+            log_error("Response body: %s", response.body);
+        }
+        http_response_free(&response);
+
+        pthread_mutex_lock(&data_mutex);
+        *valid_flag = false;
+        pthread_mutex_unlock(&data_mutex);
+
+        return -1;
+    }
+
+    bool parsed = parse(response.body, temp);
+    pthread_mutex_lock(&data_mutex);
+    if(parsed)
+    {
+        memcpy(target, temp, temp_size);
+        *valid_flag = true;
+    }
+    else
+    {
+        *valid_flag = false;
+    }
+    pthread_mutex_unlock(&data_mutex);
+
+    http_response_free(&response);
+    return 0;
+}
+
 static int fetch_camper_data_internal(void)
 {
     char api_url[MAX_URL_LENGTH];
     snprintf(api_url, sizeof(api_url), "%s/sensors/camper/states/?subscribe_telemetry=true",
              API_BASE_URL);
 
-    http_response_t response = http_get(api_url, HTTP_TIMEOUT_SECONDS);
-
-    if(!response.success)
+    camper_sensor_t temp = {0};
+    int rc = fetch_helper(api_url, "camper", (parse_fn_t)parse_camper_states, &temp, sizeof(temp),
+                          &camper, &camper.valid);
+    if(rc == 0 && camper.valid)
     {
-        log_error("Failed to fetch camper data: %s", response.error);
-        if(response.body && *response.body)
-        {
-            log_error("Response body: %s", response.body);
-        }
-        http_response_free(&response);
-
-        // Mark data as invalid
-        pthread_mutex_lock(&data_mutex);
-        camper.valid = false;
-        pthread_mutex_unlock(&data_mutex);
-
-        return -1;
-    }
-
-    // Parse the response
-    camper_sensor_t temp_camper = {0};
-    if(parse_camper_states(response.body, &temp_camper))
-    {
-        temp_camper.valid = true;
-
-        // Update the actual data structure in a thread-safe manner
-        pthread_mutex_lock(&data_mutex);
-        memcpy(&camper, &temp_camper, sizeof(camper_sensor_t));
-        pthread_mutex_unlock(&data_mutex);
-
-        // Debug output
         log_debug("Camper data updated: household_v=%.2f, starter_v=%.2f, mains_v=%.2f",
                   camper.household_voltage, camper.starter_voltage, camper.mains_voltage);
         log_debug("States: household=%s, pump=%s, water=%d%%, waste=%d%%",
                   camper.household_state ? "ON" : "OFF", camper.pump_state ? "ON" : "OFF",
                   camper.water_state, camper.waste_state);
     }
-    else
-    {
-        // Mark data as invalid if parsing failed
-        pthread_mutex_lock(&data_mutex);
-        camper.valid = false;
-        pthread_mutex_unlock(&data_mutex);
-    }
-
-    http_response_free(&response);
-
-    return 0;
+    return rc;
 }
 
-/**
- * Internal function to fetch climate data from the server and update local state
- * @param location "inside" or "outside" to specify which climate sensor to fetch
- */
 static int fetch_climate_data_internal(const char* location)
 {
     char api_url[MAX_URL_LENGTH];
     snprintf(api_url, sizeof(api_url), "%s/sensors/%s/states/", API_BASE_URL, location);
 
-    http_response_t response = http_get(api_url, HTTP_TIMEOUT_SECONDS);
-
-    if(!response.success)
+    climate_sensor_t* target = NULL;
+    const char*       what   = NULL;
+    if(strcmp(location, "inside") == 0)
     {
-        log_error("Failed to fetch %s climate data: %s", location, response.error);
-        if(response.body && *response.body)
-        {
-            log_error("Response body: %s", response.body);
-        }
-        http_response_free(&response);
-
-        // Mark data as invalid
-        pthread_mutex_lock(&data_mutex);
-        if(strcmp(location, "inside") == 0)
-        {
-            inside_climate.valid = false;
-        }
-        else if(strcmp(location, "outside") == 0)
-        {
-            outside_climate.valid = false;
-        }
-        pthread_mutex_unlock(&data_mutex);
-
-        return -1;
+        target = &inside_climate;
+        what   = "inside climate";
     }
-
-    // Parse the response
-    climate_sensor_t temp_climate = {0};
-    if(parse_climate_sensor(response.body, &temp_climate))
+    else if(strcmp(location, "outside") == 0)
     {
-        // Set valid flag
-        temp_climate.valid = true;
-
-        // Update the appropriate data structure in a thread-safe manner
-        pthread_mutex_lock(&data_mutex);
-        if(strcmp(location, "inside") == 0)
-        {
-            memcpy(&inside_climate, &temp_climate, sizeof(climate_sensor_t));
-            log_debug("Inside climate data updated: temperature=%.2f, humidity=%.2f, battery=%.2f",
-                      inside_climate.temperature, inside_climate.humidity, inside_climate.battery);
-        }
-        else if(strcmp(location, "outside") == 0)
-        {
-            memcpy(&outside_climate, &temp_climate, sizeof(climate_sensor_t));
-            log_debug("Outside climate data updated: temperature=%.2f, humidity=%.2f, battery=%.2f",
-                      outside_climate.temperature, outside_climate.humidity,
-                      outside_climate.battery);
-        }
-        pthread_mutex_unlock(&data_mutex);
+        target = &outside_climate;
+        what   = "outside climate";
     }
     else
     {
-        // Mark data as invalid if parsing failed
-        pthread_mutex_lock(&data_mutex);
-        if(strcmp(location, "inside") == 0)
-        {
-            inside_climate.valid = false;
-        }
-        else if(strcmp(location, "outside") == 0)
-        {
-            outside_climate.valid = false;
-        }
-        pthread_mutex_unlock(&data_mutex);
+        log_error("Unknown climate location: %s", location);
+        return -1;
     }
 
-    http_response_free(&response);
-    return 0;
+    climate_sensor_t temp = {0};
+    int rc = fetch_helper(api_url, what, (parse_fn_t)parse_climate_sensor, &temp, sizeof(temp),
+                          target, &target->valid);
+    if(rc == 0 && target->valid)
+    {
+        log_debug("%s data updated: temperature=%.2f, humidity=%.2f, battery=%.2f", what,
+                  target->temperature, target->humidity, target->battery);
+    }
+    return rc;
 }
 
-/**
- * Internal function to fetch SmartSolar data from the server and update local state
- */
 static int fetch_smart_solar_data_internal(void)
 {
     char api_url[MAX_URL_LENGTH];
     snprintf(api_url, sizeof(api_url), "%s/sensors/SmartSolar/states/", API_BASE_URL);
 
-    http_response_t response = http_get(api_url, HTTP_TIMEOUT_SECONDS);
-
-    if(!response.success)
+    smart_solar_t temp = {0};
+    int rc = fetch_helper(api_url, "SmartSolar", (parse_fn_t)parse_smart_solar, &temp, sizeof(temp),
+                          &smart_solar, &smart_solar.valid);
+    if(rc == 0 && smart_solar.valid)
     {
-        log_error("Failed to fetch SmartSolar data: %s", response.error);
-        if(response.body && *response.body)
-        {
-            log_error("Response body: %s", response.body);
-        }
-        http_response_free(&response);
-
-        // Mark data as invalid
-        pthread_mutex_lock(&data_mutex);
-        smart_solar.valid = false;
-        pthread_mutex_unlock(&data_mutex);
-
-        return -1;
-    }
-
-    // Parse the response
-    smart_solar_t temp_solar = {0};
-    if(parse_smart_solar(response.body, &temp_solar))
-    {
-        // Set valid flag
-        temp_solar.valid = true;
-
-        // Update the actual data structure in a thread-safe manner
-        pthread_mutex_lock(&data_mutex);
-        memcpy(&smart_solar, &temp_solar, sizeof(smart_solar_t));
-        pthread_mutex_unlock(&data_mutex);
-
-        // Debug output
         log_debug("SmartSolar data updated: battery_v=%.2f, charging_current=%.2f, power=%.2f W, "
                   "yield=%.2f kWh",
                   smart_solar.battery_voltage, smart_solar.battery_charging_current,
                   smart_solar.solar_power, smart_solar.yield_today);
     }
-    else
-    {
-        // Mark data as invalid if parsing failed
-        pthread_mutex_lock(&data_mutex);
-        smart_solar.valid = false;
-        pthread_mutex_unlock(&data_mutex);
-    }
-
-    http_response_free(&response);
-
-    return 0;
+    return rc;
 }
 
-/**
- * Internal function to fetch SmartShunt data from the server and update local state
- */
 static int fetch_smart_shunt_data_internal(void)
 {
     char api_url[MAX_URL_LENGTH];
     snprintf(api_url, sizeof(api_url), "%s/sensors/SmartShunt/states/", API_BASE_URL);
 
-    http_response_t response = http_get(api_url, HTTP_TIMEOUT_SECONDS);
-
-    if(!response.success)
+    smart_shunt_t temp = {0};
+    int rc = fetch_helper(api_url, "SmartShunt", (parse_fn_t)parse_smart_shunt, &temp, sizeof(temp),
+                          &smart_shunt, &smart_shunt.valid);
+    if(rc == 0 && smart_shunt.valid)
     {
-        log_error("Failed to fetch SmartShunt data: %s", response.error);
-        if(response.body && *response.body)
-        {
-            log_error("Response body: %s", response.body);
-        }
-        http_response_free(&response);
-
-        // Mark data as invalid
-        pthread_mutex_lock(&data_mutex);
-        smart_shunt.valid = false;
-        pthread_mutex_unlock(&data_mutex);
-
-        return -1;
-    }
-
-    // Parse the response
-    smart_shunt_t temp_shunt = {0};
-    if(parse_smart_shunt(response.body, &temp_shunt))
-    {
-        // Set valid flag
-        temp_shunt.valid = true;
-
-        // Update the actual data structure in a thread-safe manner
-        pthread_mutex_lock(&data_mutex);
-        memcpy(&smart_shunt, &temp_shunt, sizeof(smart_shunt_t));
-        pthread_mutex_unlock(&data_mutex);
-
-        // Debug output
         log_debug(
             "SmartShunt data updated: voltage=%.2f, current=%.2f, SoC=%.1f%%, remaining=%d mins",
-            temp_shunt.voltage, temp_shunt.current, temp_shunt.soc, temp_shunt.remaining_mins);
+            smart_shunt.voltage, smart_shunt.current, smart_shunt.soc, smart_shunt.remaining_mins);
     }
-    else
-    {
-        // Mark data as invalid if parsing failed
-        pthread_mutex_lock(&data_mutex);
-        smart_shunt.valid = false;
-        pthread_mutex_unlock(&data_mutex);
-    }
-
-    http_response_free(&response);
-
-    return 0;
+    return rc;
 }
 
 /**
