@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make -C /home/oudenijhuis/develop_tom/lv_camper_gui/build -j)",
+      "Bash(cmake ..)",
+      "Bash(make -j)"
+    ]
+  }
+}

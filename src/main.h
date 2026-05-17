@@ -65,7 +65,7 @@ extern "C"
      * Data Update Intervals
      ****************************************************************************/
 
-#define DATA_CAMPER_UPDATE_INTERVAL_MS 5793 /* Data refresh interval in ms */
+#define DATA_CAMPER_UPDATE_INTERVAL_MS 2000 /* Camper states refresh interval in ms */
 #define DATA_OTHER_UPDATE_INTERVAL_MS 8935  /* Data other refresh interval in ms */
 #define DATA_CHART_UPDATE_INTERVAL_MS 6002  /* Chart refresh interval */
 #define LOG_REFRESH_INTERVAL_MS 2999        /* Log display refresh interval in ms */

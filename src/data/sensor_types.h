@@ -6,6 +6,8 @@
 #ifndef SENSOR_TYPES_H
 #define SENSOR_TYPES_H
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -44,11 +46,14 @@ extern "C"
         float household_voltage;
         float starter_voltage;
         float mains_voltage;
-        bool  household_state;
-        bool  pump_state;
-        int   water_state; // Percentage 0-100
-        int   waste_state; // Percentage 0-100
-        bool  valid;
+        bool     household_state;
+        bool     pump_state;
+        int      water_state; // Percentage 0-100
+        int      waste_state; // Percentage 0-100
+        bool     valid;
+        uint32_t household_state_updated_ms;
+        uint32_t pump_state_updated_ms;
+        uint16_t errors_state; // Firmware error bitmask; see error_bits.h
     } camper_sensor_t;
 
     /**

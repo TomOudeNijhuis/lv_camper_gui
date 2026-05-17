@@ -33,6 +33,13 @@ static lv_obj_t*   ui_wifi_ip_label            = NULL; // Wi-Fi IP address label
 static lv_obj_t*   ui_wifi_strength            = NULL; // Wi-Fi signal strength
 static lv_timer_t* update_timer                = NULL;
 
+// Timestamps of the most recent user toggles. While the cache's matching
+// *_updated_ms is older than these, an action POST is in flight and the
+// switch should not be synced from cache - that would flicker back to the
+// pre-toggle value when an in-flight GET returns stale data.
+static uint32_t last_household_toggle_ms = 0;
+static uint32_t last_pump_toggle_ms      = 0;
+
 void update_status_ui(camper_sensor_t* camper_data);
 
 static void household_event_handler(lv_event_t* e)
@@ -40,11 +47,10 @@ static void household_event_handler(lv_event_t* e)
     lv_obj_t* sw      = lv_event_get_target(e);
     bool      checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
 
-    const char* status = checked ? "ON" : "OFF";
-    log_info("Household switch changed to: %s", status);
+    log_info("Household switch changed to: %d", checked);
 
-    // Request background action instead of blocking UI
-    request_camper_action("household_state", status);
+    last_household_toggle_ms = monotonic_ms();
+    request_camper_action("household_state", checked ? 1 : 0);
 }
 
 static void pump_event_handler(lv_event_t* e)
@@ -52,11 +58,10 @@ static void pump_event_handler(lv_event_t* e)
     lv_obj_t* sw      = lv_event_get_target(e);
     bool      checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
 
-    const char* status = checked ? "ON" : "OFF";
-    log_info("Pump switch changed to: %s", status);
+    log_info("Pump switch changed to: %d", checked);
 
-    // Request background action instead of blocking UI
-    request_camper_action("pump_state", status);
+    last_pump_toggle_ms = monotonic_ms();
+    request_camper_action("pump_state", checked ? 1 : 0);
 }
 
 static void update_battery_gauge(lv_obj_t* scale_line, lv_obj_t* needle_line, float voltage)
@@ -510,16 +515,19 @@ void update_status_ui(camper_sensor_t* camper_data)
         if(ui_household_switch)
         {
             lv_obj_clear_state(ui_household_switch, LV_STATE_DISABLED);
-            bool current_state = lv_obj_has_state(ui_household_switch, LV_STATE_CHECKED);
-            if(current_state != camper_data->household_state)
+            if(camper_data->household_state_updated_ms >= last_household_toggle_ms)
             {
-                if(camper_data->household_state)
+                bool current_state = lv_obj_has_state(ui_household_switch, LV_STATE_CHECKED);
+                if(current_state != camper_data->household_state)
                 {
-                    lv_obj_add_state(ui_household_switch, LV_STATE_CHECKED);
-                }
-                else
-                {
-                    lv_obj_clear_state(ui_household_switch, LV_STATE_CHECKED);
+                    if(camper_data->household_state)
+                    {
+                        lv_obj_add_state(ui_household_switch, LV_STATE_CHECKED);
+                    }
+                    else
+                    {
+                        lv_obj_clear_state(ui_household_switch, LV_STATE_CHECKED);
+                    }
                 }
             }
         }
@@ -528,16 +536,19 @@ void update_status_ui(camper_sensor_t* camper_data)
         if(ui_pump_switch)
         {
             lv_obj_clear_state(ui_pump_switch, LV_STATE_DISABLED);
-            bool current_state = lv_obj_has_state(ui_pump_switch, LV_STATE_CHECKED);
-            if(current_state != camper_data->pump_state)
+            if(camper_data->pump_state_updated_ms >= last_pump_toggle_ms)
             {
-                if(camper_data->pump_state)
+                bool current_state = lv_obj_has_state(ui_pump_switch, LV_STATE_CHECKED);
+                if(current_state != camper_data->pump_state)
                 {
-                    lv_obj_add_state(ui_pump_switch, LV_STATE_CHECKED);
-                }
-                else
-                {
-                    lv_obj_clear_state(ui_pump_switch, LV_STATE_CHECKED);
+                    if(camper_data->pump_state)
+                    {
+                        lv_obj_add_state(ui_pump_switch, LV_STATE_CHECKED);
+                    }
+                    else
+                    {
+                        lv_obj_clear_state(ui_pump_switch, LV_STATE_CHECKED);
+                    }
                 }
             }
         }

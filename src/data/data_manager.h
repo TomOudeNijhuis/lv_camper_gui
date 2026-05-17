@@ -54,7 +54,18 @@ extern "C"
     /**
      * Request a camper action in the background
      */
-    void request_camper_action(const char* entity_name, const char* status);
+    void request_camper_action(const char* entity_name, int state);
+
+    /**
+     * Request clearing of camper error bits in the background.
+     * Mask is a bitmask of bits to clear; 0xFFFF clears all.
+     */
+    void request_camper_clear_errors(uint16_t mask);
+
+    /**
+     * Monotonic millisecond clock used to detect cache freshness vs. user actions.
+     */
+    uint32_t monotonic_ms(void);
 
     /**
      * Get a copy of the current camper data

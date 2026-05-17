@@ -373,8 +373,8 @@ bool parse_camper_states(const char* json_str, camper_sensor_t* camper_data)
         }
         else if(strcmp(entity_name, "household_state") == 0)
         {
-            temp_camper.household_state =
-                (strcmp(state_str, "ON") == 0 || strcmp(state_str, "PENDING") == 0);
+            temp_camper.household_state            = (strcmp(state_str, "1") == 0);
+            temp_camper.household_state_updated_ms = monotonic_ms();
             field_count++;
         }
         else if(strcmp(entity_name, "water_state") == 0)
@@ -389,15 +389,21 @@ bool parse_camper_states(const char* json_str, camper_sensor_t* camper_data)
         }
         else if(strcmp(entity_name, "pump_state") == 0)
         {
-            temp_camper.pump_state = (strcmp(state_str, "ON") == 0);
+            temp_camper.pump_state            = (strcmp(state_str, "1") == 0);
+            temp_camper.pump_state_updated_ms = monotonic_ms();
+            field_count++;
+        }
+        else if(strcmp(entity_name, "errors") == 0)
+        {
+            temp_camper.errors_state = (uint16_t)strtoul(state_str, NULL, 0);
             field_count++;
         }
     }
 
-    // Check if we found at least 7 required fields
-    if(field_count < 7)
+    // Check if we found at least 8 required fields
+    if(field_count < 8)
     {
-        log_error("Camper states data must contain at least 7 fields found %d", field_count);
+        log_error("Camper states data must contain at least 8 fields found %d", field_count);
         json_object_put(parsed_json);
         return false;
     }

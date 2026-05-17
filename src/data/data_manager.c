@@ -4,10 +4,12 @@
  *
  ******************************************************************/
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h> // Add this for snprintf
 #include <pthread.h>
 #include <unistd.h>
+#include <time.h>
 #include "data_manager.h"
 #include "sensor_parsers.h"
 #include "data_actions.h"
@@ -59,10 +61,18 @@ static bool dequeue_fetch_request(fetch_request_t* action);
 
 // Action queue
 #define MAX_ACTION_QUEUE 10
+typedef enum
+{
+    CAMPER_ACTION_STATE,
+    CAMPER_ACTION_MASK,
+} camper_action_kind_t;
+
 typedef struct
 {
-    char entity_name[16];
-    char status[8]; // ON/OFF or other short status strings
+    char                 entity_name[16];
+    camper_action_kind_t kind;
+    int                  state; // valid when kind == CAMPER_ACTION_STATE
+    uint16_t             mask;  // valid when kind == CAMPER_ACTION_MASK
 } camper_action_t;
 
 static camper_action_t action_queue[MAX_ACTION_QUEUE];
@@ -87,6 +97,13 @@ static int fetch_entity_history_data_internal(void);
 /**
  * Initialize the background worker system
  */
+uint32_t monotonic_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint32_t)(ts.tv_sec * 1000U + ts.tv_nsec / 1000000U);
+}
+
 int init_background_fetcher(void)
 {
     if(worker_running)
@@ -152,7 +169,7 @@ bool is_background_busy(void)
 /*
  * Request a camper action in the background
  */
-void request_camper_action(const char* entity_name, const char* status)
+void request_camper_action(const char* entity_name, int state)
 {
     if(!worker_running)
     {
@@ -160,15 +177,35 @@ void request_camper_action(const char* entity_name, const char* status)
         return;
     }
 
-    camper_action_t action;
+    camper_action_t action = {0};
     strncpy(action.entity_name, entity_name, sizeof(action.entity_name) - 1);
     action.entity_name[sizeof(action.entity_name) - 1] = '\0'; // Ensure null termination
-    strncpy(action.status, status, sizeof(action.status) - 1);
-    action.status[sizeof(action.status) - 1] = '\0'; // Ensure null termination
+    action.kind                                        = CAMPER_ACTION_STATE;
+    action.state                                       = state;
 
     if(!enqueue_action(&action))
     {
         log_error("Failed to queue action - queue full");
+    }
+}
+
+void request_camper_clear_errors(uint16_t mask)
+{
+    if(!worker_running)
+    {
+        log_error("Background worker not running, initialize it first");
+        return;
+    }
+
+    camper_action_t action = {0};
+    strncpy(action.entity_name, "errors", sizeof(action.entity_name) - 1);
+    action.entity_name[sizeof(action.entity_name) - 1] = '\0';
+    action.kind                                        = CAMPER_ACTION_MASK;
+    action.mask                                        = mask;
+
+    if(!enqueue_action(&action))
+    {
+        log_error("Failed to queue clear-errors action - queue full");
     }
 }
 
@@ -416,7 +453,14 @@ static void* background_worker_thread(void* arg)
         // Handle one action from the queue
         if(dequeue_action(&action))
         {
-            set_camper_action_internal(action.entity_name, action.status);
+            if(action.kind == CAMPER_ACTION_MASK)
+            {
+                set_camper_mask_action_internal(action.entity_name, action.mask);
+            }
+            else
+            {
+                set_camper_action_internal(action.entity_name, action.state);
+            }
             did_work = true;
         }
 
@@ -497,7 +541,8 @@ void clear_entity_history(entity_history_t* history)
 static int fetch_camper_data_internal(void)
 {
     char api_url[MAX_URL_LENGTH];
-    snprintf(api_url, sizeof(api_url), "%s/sensors/camper/states/", API_BASE_URL);
+    snprintf(api_url, sizeof(api_url), "%s/sensors/camper/states/?subscribe_telemetry=true",
+             API_BASE_URL);
 
     http_response_t response = http_get(api_url, HTTP_TIMEOUT_SECONDS);
 
@@ -847,11 +892,17 @@ bool update_camper_entity(const char* entity_name, const char* state_str)
 
     if(strcmp(entity_name, "household_state") == 0)
     {
-        camper.household_state = (strcmp(state_str, "ON") == 0);
+        camper.household_state            = (strcmp(state_str, "1") == 0);
+        camper.household_state_updated_ms = monotonic_ms();
     }
     else if(strcmp(entity_name, "pump_state") == 0)
     {
-        camper.pump_state = (strcmp(state_str, "ON") == 0);
+        camper.pump_state            = (strcmp(state_str, "1") == 0);
+        camper.pump_state_updated_ms = monotonic_ms();
+    }
+    else if(strcmp(entity_name, "errors") == 0)
+    {
+        camper.errors_state = (uint16_t)strtoul(state_str, NULL, 0);
     }
     else
     {
