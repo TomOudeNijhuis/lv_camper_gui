@@ -1,6 +1,6 @@
 /**
  * @file lv_conf.h
- * Configuration file for v9.3.0-dev
+ * Configuration file for v9.5.0
  */
 
 /*
@@ -568,34 +568,35 @@
  * https://fonts.google.com/specimen/Montserrat */
 #define LV_FONT_MONTSERRAT_8  0
 #define LV_FONT_MONTSERRAT_10 0
+/* Only montserrat 12/14/16/20 are used by the camper-gui. */
 #define LV_FONT_MONTSERRAT_12 1
 #define LV_FONT_MONTSERRAT_14 1
 #define LV_FONT_MONTSERRAT_16 1
-#define LV_FONT_MONTSERRAT_18 1
+#define LV_FONT_MONTSERRAT_18 0
 #define LV_FONT_MONTSERRAT_20 1
-#define LV_FONT_MONTSERRAT_22 1
-#define LV_FONT_MONTSERRAT_24 1
-#define LV_FONT_MONTSERRAT_26 1
-#define LV_FONT_MONTSERRAT_28 1
-#define LV_FONT_MONTSERRAT_30 1
-#define LV_FONT_MONTSERRAT_32 1
-#define LV_FONT_MONTSERRAT_34 1
-#define LV_FONT_MONTSERRAT_36 1
-#define LV_FONT_MONTSERRAT_38 1
-#define LV_FONT_MONTSERRAT_40 1
-#define LV_FONT_MONTSERRAT_42 1
-#define LV_FONT_MONTSERRAT_44 1
-#define LV_FONT_MONTSERRAT_46 1
-#define LV_FONT_MONTSERRAT_48 1
+#define LV_FONT_MONTSERRAT_22 0
+#define LV_FONT_MONTSERRAT_24 0
+#define LV_FONT_MONTSERRAT_26 0
+#define LV_FONT_MONTSERRAT_28 0
+#define LV_FONT_MONTSERRAT_30 0
+#define LV_FONT_MONTSERRAT_32 0
+#define LV_FONT_MONTSERRAT_34 0
+#define LV_FONT_MONTSERRAT_36 0
+#define LV_FONT_MONTSERRAT_38 0
+#define LV_FONT_MONTSERRAT_40 0
+#define LV_FONT_MONTSERRAT_42 0
+#define LV_FONT_MONTSERRAT_44 0
+#define LV_FONT_MONTSERRAT_46 0
+#define LV_FONT_MONTSERRAT_48 0
 
 /* Demonstrate special features */
-#define LV_FONT_MONTSERRAT_28_COMPRESSED 1
-#define LV_FONT_DEJAVU_16_PERSIAN_HEBREW 1
+#define LV_FONT_MONTSERRAT_28_COMPRESSED 0
+#define LV_FONT_DEJAVU_16_PERSIAN_HEBREW 0
 #define LV_FONT_SIMSUN_14_CJK            0  /**< 1000 most common CJK radicals */
-#define LV_FONT_SIMSUN_16_CJK            1
+#define LV_FONT_SIMSUN_16_CJK            0
 
 /** Pixel perfect monospaced fonts */
-#define LV_FONT_UNSCII_8  1
+#define LV_FONT_UNSCII_8  0
 #define LV_FONT_UNSCII_16 0
 
 /** Optionally declare custom fonts here.
@@ -683,94 +684,46 @@
  * */
 #define LV_WIDGETS_HAS_DEFAULT_VALUE  1
 
-#define LV_USE_ANIMIMG    1
-
-#define LV_USE_ARC        1
-
+/* Only enable widgets actually used by the camper-gui:
+ * bar, button (kept defensively — other widgets inherit from it),
+ * chart, label, led, line, scale, spinner, switch, tabview. */
+#define LV_USE_ANIMIMG    0
+#define LV_USE_ARC        1   /* required by lv_spinner */
 #define LV_USE_BAR        1
-
 #define LV_USE_BUTTON        1
-
-#define LV_USE_BUTTONMATRIX  1
-
-#define LV_USE_CALENDAR   1
-#if LV_USE_CALENDAR
-    #define LV_CALENDAR_WEEK_STARTS_MONDAY 0
-    #if LV_CALENDAR_WEEK_STARTS_MONDAY
-        #define LV_CALENDAR_DEFAULT_DAY_NAMES {"Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"}
-    #else
-        #define LV_CALENDAR_DEFAULT_DAY_NAMES {"Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"}
-    #endif
-
-    #define LV_CALENDAR_DEFAULT_MONTH_NAMES {"January", "February", "March",  "April", "May",  "June", "July", "August", "September", "October", "November", "December"}
-    #define LV_USE_CALENDAR_HEADER_ARROW 1
-    #define LV_USE_CALENDAR_HEADER_DROPDOWN 1
-    #define LV_USE_CALENDAR_CHINESE 0
-#endif  /*LV_USE_CALENDAR*/
-
-#define LV_USE_CANVAS     1
-
+#define LV_USE_BUTTONMATRIX  0
+#define LV_USE_CALENDAR   0
+#define LV_USE_CANVAS     0
 #define LV_USE_CHART      1
-
-#define LV_USE_CHECKBOX   1
-
-#define LV_USE_DROPDOWN   1   /**< Requires: lv_label */
-
-#define LV_USE_IMAGE      1   /**< Requires: lv_label */
-
-#define LV_USE_IMAGEBUTTON     1
-
-#define LV_USE_KEYBOARD   1
-
+#define LV_USE_CHECKBOX   0
+#define LV_USE_DROPDOWN   0
+#define LV_USE_IMAGE      1   /* required by lv_scale (image-needle feature) */
+#define LV_USE_IMAGEBUTTON     0
+#define LV_USE_KEYBOARD   0
 #define LV_USE_LABEL      1
 #if LV_USE_LABEL
-    #define LV_LABEL_TEXT_SELECTION 1   /**< Enable selecting text of the label */
-    #define LV_LABEL_LONG_TXT_HINT 1    /**< Store some extra info in labels to speed up drawing of very long text */
-    #define LV_LABEL_WAIT_CHAR_COUNT 3  /**< The count of wait chart */
+    #define LV_LABEL_TEXT_SELECTION 1
+    #define LV_LABEL_LONG_TXT_HINT 1
+    #define LV_LABEL_WAIT_CHAR_COUNT 3
 #endif
-
 #define LV_USE_LED        1
-
 #define LV_USE_LINE       1
-
-#define LV_USE_LIST       1
-
-#define LV_USE_LOTTIE     1
-
-#define LV_USE_MENU       1
-
-#define LV_USE_MSGBOX     1
-
-#define LV_USE_ROLLER     1   /**< Requires: lv_label */
-
+#define LV_USE_LIST       0
+#define LV_USE_LOTTIE     0
+#define LV_USE_MENU       0
+#define LV_USE_MSGBOX     0
+#define LV_USE_ROLLER     0
 #define LV_USE_SCALE      1
-
-#define LV_USE_SLIDER     1   /**< Requires: lv_bar */
-
-#define LV_USE_SPAN       1
-#if LV_USE_SPAN
-    /** A line of text can contain this maximum number of span descriptors. */
-    #define LV_SPAN_SNIPPET_STACK_SIZE 64
-#endif
-
-#define LV_USE_SPINBOX    1
-
+#define LV_USE_SLIDER     1   /* referenced via lv_slider_class type check in src/ui/ui.c */
+#define LV_USE_SPAN       0
+#define LV_USE_SPINBOX    0
 #define LV_USE_SPINNER    1
-
 #define LV_USE_SWITCH     1
-
-#define LV_USE_TABLE      1
-
+#define LV_USE_TABLE      0
 #define LV_USE_TABVIEW    1
-
-#define LV_USE_TEXTAREA   1   /**< Requires: lv_label */
-#if LV_USE_TEXTAREA != 0
-    #define LV_TEXTAREA_DEF_PWD_SHOW_TIME 1500    /**< [ms] */
-#endif
-
-#define LV_USE_TILEVIEW   1
-
-#define LV_USE_WIN        1
+#define LV_USE_TEXTAREA   0
+#define LV_USE_TILEVIEW   0
+#define LV_USE_WIN        0
 
 /*==================
  * THEMES
@@ -791,10 +744,10 @@
 #endif /*LV_USE_THEME_DEFAULT*/
 
 /** A very simple theme that is a good starting point for a custom theme */
-#define LV_USE_THEME_SIMPLE 1
+#define LV_USE_THEME_SIMPLE 0
 
 /** A theme designed for monochrome displays */
-#define LV_USE_THEME_MONO 1
+#define LV_USE_THEME_MONO 0
 
 /*==================
  * LAYOUTS
@@ -805,7 +758,7 @@
 #define LV_USE_FLEX 1
 
 /** A layout similar to Grid in CSS. */
-#define LV_USE_GRID 1
+#define LV_USE_GRID 0
 
 /*====================
  * 3RD PARTS LIBRARIES
@@ -819,13 +772,8 @@
  *  https://docs.lvgl.io/master/details/main-modules/fs.html#lv-fs-identifier-letters . */
 #define LV_FS_DEFAULT_DRIVER_LETTER 'A'
 
-/** API for fopen, fread, etc. */
-#define LV_USE_FS_STDIO 1
-#if LV_USE_FS_STDIO
-    #define LV_FS_STDIO_LETTER 'A'
-    #define LV_FS_STDIO_PATH ""         /**< Set the working directory. File/directory paths will be appended to it. */
-    #define LV_FS_STDIO_CACHE_SIZE 0    /**< >0 to cache this number of bytes in lv_fs_read() */
-#endif
+/** API for fopen, fread, etc. — not used, project loads no files via LVGL's FS. */
+#define LV_USE_FS_STDIO 0
 
 /** API for open, read, etc. */
 #define LV_USE_FS_POSIX 0
@@ -884,42 +832,17 @@
     #define LV_FS_UEFI_LETTER '\0'      /**< Set an upper-case driver-identifier letter for this driver (e.g. 'A'). */
 #endif
 
-/** LODEPNG decoder library */
-#define LV_USE_LODEPNG 1
-
-/** PNG decoder(libpng) library */
+/* No image decoders or asset libraries used by this project. */
+#define LV_USE_LODEPNG 0
 #define LV_USE_LIBPNG 0
-
-/** BMP decoder library */
-#define LV_USE_BMP 1
-
-/** JPG + split JPG decoder library.
- *  Split JPG is a custom format optimized for embedded systems. */
-#define LV_USE_TJPGD 1
-
-/** libjpeg-turbo decoder library.
- *  - Supports complete JPEG specifications and high-performance JPEG decoding. */
+#define LV_USE_BMP 0
+#define LV_USE_TJPGD 0
 #define LV_USE_LIBJPEG_TURBO 0
-
-/** GIF decoder library */
 #define LV_USE_GIF 0
-#if LV_USE_GIF
-    /** GIF decoder accelerate */
-    #define LV_GIF_CACHE_DECODE_DATA 0
-#endif
-
-
-/** Decode bin images to RAM */
-#define LV_BIN_DECODER_RAM_LOAD 1
-
-/** RLE decompress library */
-#define LV_USE_RLE 1
-
-/** QR code library */
-#define LV_USE_QRCODE 1
-
-/** Barcode code library */
-#define LV_USE_BARCODE 1
+#define LV_BIN_DECODER_RAM_LOAD 0
+#define LV_USE_RLE 0
+#define LV_USE_QRCODE 0
+#define LV_USE_BARCODE 0
 
 /** FreeType library */
 #define LV_USE_FREETYPE 0
@@ -932,8 +855,8 @@
     #define LV_FREETYPE_CACHE_FT_GLYPH_CNT 256
 #endif
 
-/** Built-in TTF decoder */
-#define LV_USE_TINY_TTF 1
+/** Built-in TTF decoder — not used, project uses built-in montserrat fonts. */
+#define LV_USE_TINY_TTF 0
 #if LV_USE_TINY_TTF
     /* Enable loading TTF data from files */
     #define LV_TINY_TTF_FILE_SUPPORT 0
@@ -954,7 +877,7 @@
 #define LV_USE_THORVG_EXTERNAL 0
 
 /** Use lvgl built-in LZ4 lib */
-#define LV_USE_LZ4_INTERNAL  1
+#define LV_USE_LZ4_INTERNAL  0
 
 /** Use external LZ4 library */
 #define LV_USE_LZ4_EXTERNAL  0
@@ -1079,10 +1002,10 @@
 #define LV_USE_FRAGMENT 0
 
 /** 1: Support using images as font in label or span widgets */
-#define LV_USE_IMGFONT 1
+#define LV_USE_IMGFONT 0
 
-/** 1: Enable an observer pattern implementation */
-#define LV_USE_OBSERVER 1
+/** 1: Enable an observer pattern implementation — unused by camper-gui. */
+#define LV_USE_OBSERVER 0
 
 /** 1: Enable Pinyin input method
  *  - Requires: lv_keyboard */
@@ -1285,64 +1208,94 @@
 *==================*/
 
 /** Enable examples to be built with the library. */
-#define LV_BUILD_EXAMPLES 1
+#define LV_BUILD_EXAMPLES 0
 
 /*===================
- * DEMO USAGE
+ * DEMO USAGE — all off (not used by camper-gui)
  ====================*/
-
-/** Show some widgets. This might be required to increase `LV_MEM_SIZE`. */
-#define LV_USE_DEMO_WIDGETS 1
-
-/** Demonstrate usage of encoder and keyboard. */
-#define LV_USE_DEMO_KEYPAD_AND_ENCODER 1
-
-/** Benchmark your system */
-#define LV_USE_DEMO_BENCHMARK 1
-
-/** Render test for each primitive.
- *  - Requires at least 480x272 display. */
-#define LV_USE_DEMO_RENDER 1
-
-/** Stress test for LVGL */
-#define LV_USE_DEMO_STRESS 1
-
-/** Music player demo */
-#define LV_USE_DEMO_MUSIC 1
-#if LV_USE_DEMO_MUSIC
-    #define LV_DEMO_MUSIC_SQUARE    0
-    #define LV_DEMO_MUSIC_LANDSCAPE 0
-    #define LV_DEMO_MUSIC_ROUND     0
-    #define LV_DEMO_MUSIC_LARGE     0
-    #define LV_DEMO_MUSIC_AUTO_PLAY 0
-#endif
-
-/** Flex layout demo */
-#define LV_USE_DEMO_FLEX_LAYOUT     1
-
-/** Smart-phone like multi-language demo */
-#define LV_USE_DEMO_MULTILANG       1
-
-/** Widget transformation demo */
-#define LV_USE_DEMO_TRANSFORM       1
-
-/** Demonstrate scroll settings */
-#define LV_USE_DEMO_SCROLL          1
-
-/** Vector graphic demo */
+#define LV_USE_DEMO_WIDGETS 0
+#define LV_USE_DEMO_KEYPAD_AND_ENCODER 0
+#define LV_USE_DEMO_BENCHMARK 0
+#define LV_USE_DEMO_RENDER 0
+#define LV_USE_DEMO_STRESS 0
+#define LV_USE_DEMO_MUSIC 0
+#define LV_USE_DEMO_FLEX_LAYOUT     0
+#define LV_USE_DEMO_MULTILANG       0
+#define LV_USE_DEMO_TRANSFORM       0
+#define LV_USE_DEMO_SCROLL          0
 #define LV_USE_DEMO_VECTOR_GRAPHIC  0
-
-/*E-bike demo with Lottie animations (if LV_USE_LOTTIE is enabled)*/
 #define LV_USE_DEMO_EBIKE           0
-#if LV_USE_DEMO_EBIKE
-    #define LV_DEMO_EBIKE_PORTRAIT  0    /*0: for 480x270..480x320, 1: for 480x800..720x1280*/
-#endif
-
-/** High-resolution demo */
-#define LV_USE_DEMO_HIGH_RES        1
-
-/* Smart watch demo */
+#define LV_USE_DEMO_HIGH_RES        0
 #define LV_USE_DEMO_SMARTWATCH      0
+
+/*==================
+ * NEW IN v9.5 — all disabled on this project (software rendering only)
+ *==================*/
+
+/** Thread priority of the drawing task.
+ *  Higher values mean higher priority.
+ *  Can use values from lv_thread_prio_t enum in lv_os.h: LV_THREAD_PRIO_LOWEST,
+ *  LV_THREAD_PRIO_LOW, LV_THREAD_PRIO_MID, LV_THREAD_PRIO_HIGH, LV_THREAD_PRIO_HIGHEST */
+#define LV_DRAW_THREAD_PRIO LV_THREAD_PRIO_HIGH
+
+/** Draw using espressif PPA accelerator */
+#define LV_USE_PPA  0
+
+/** Use EVE FT81X GPU. */
+#define LV_USE_DRAW_EVE 0
+
+/** Use NanoVG Renderer — GPU vector rendering. Requires LV_USE_NANOVG, LV_USE_MATRIX.
+ *  Disabled: the Pi Zero 2W's VideoCore IV is too weak for path-based GPU rendering
+ *  of this UI; software rendering is faster. */
+#define LV_USE_DRAW_NANOVG 0
+
+/** Enable NanoVG (vector graphics library). See LV_USE_DRAW_NANOVG. */
+#define LV_USE_NANOVG 0
+
+/** Imagination Technologies' G2D 2D GPU. */
+#define LV_USE_G2D 0
+
+/** NXP eLCDIF display controller. */
+#define LV_USE_NXP_ELCDIF 0
+
+/** FT81X external GPU. */
+#define LV_USE_FT81X 0
+
+/** Novatek NV3007 display controller. */
+#define LV_USE_NV3007 0
+
+/** Lovyan_GFX driver. */
+#define LV_USE_LOVYAN_GFX 0
+
+/** Arc-shaped label (curved text). */
+#define LV_USE_ARCLABEL 0
+
+/** 3D texture support — requires GPU draw unit. */
+#define LV_USE_3DTEXTURE 0
+
+/** glTF 3D model loader. Requires LV_USE_3DTEXTURE. */
+#define LV_USE_GLTF 0
+
+/** GLFW window backend (desktop). Not used — we use SDL+KMS/DRM. */
+#define LV_USE_GLFW 0
+
+/** GStreamer media playback. */
+#define LV_USE_GSTREAMER 0
+
+/** WebP image decoder. */
+#define LV_USE_LIBWEBP 0
+
+/** FrogFS filesystem driver. */
+#define LV_USE_FS_FROGFS 0
+
+/** External data hooks for embedding LVGL in larger apps. */
+#define LV_USE_EXT_DATA 0
+
+/** Translation / i18n helpers (string table). */
+#define LV_USE_TRANSLATION 0
+
+/** Build LVGL demo apps with the library. We don't use any. */
+#define LV_BUILD_DEMOS 0
 
 /*--END OF LV_CONF_H--*/
 

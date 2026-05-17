@@ -64,6 +64,8 @@ file(GLOB_RECURSE LV_LINUX_UI_SRC src/ui/*.c)
 file(GLOB LV_LINUX_DATA_SRC src/data/*.c)
 set(LV_LINUX_INC src/lib)
 
+set(CONFIG_LV_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
+set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 add_subdirectory(lvgl)
 target_include_directories(lvgl PUBLIC ${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/src/lib ${PKG_CONFIG_INC})
 add_library(lvgl_linux STATIC ${LV_LINUX_LIB_SRC} ${LV_LINUX_UI_SRC} ${LV_LINUX_DATA_SRC} ${LV_LINUX_BACKEND_SRC})

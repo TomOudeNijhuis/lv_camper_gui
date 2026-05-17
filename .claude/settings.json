@@ -2,11 +2,20 @@
   "permissions": {
     "allow": [
       "Bash(make -C /home/oudenijhuis/develop_tom/lv_camper_gui/build -j)",
-      "Bash(cmake ..)",
-      "Bash(make -j)",
-      "Bash(cat)",
-      "Bash(bash /tmp/compare_fetches.sh)",
-      "Bash(grep -E \"\\\\.\\(o|a|so|bin|elf|exe\\)$|build/|build-arm64/\")"
+      "WebFetch(domain:docs.lvgl.io)",
+      "WebFetch(domain:lvgl.io)",
+      "Bash(grep -v \" 0$\")",
+      "Bash(git submodule *)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(git -C /home/oudenijhuis/develop_tom/lv_camper_gui/lvgl show v9.5.0:CMakeLists.txt)",
+      "Bash(git -C /home/oudenijhuis/develop_tom/lv_camper_gui/lvgl ls-tree -r v9.5.0 --name-only)",
+      "Bash(git -C /home/oudenijhuis/develop_tom/lv_camper_gui/lvgl show v9.2.2:CMakeLists.txt)",
+      "Bash(git -C /home/oudenijhuis/develop_tom/lv_camper_gui/lvgl grep -n \"thorvg\\\\|THORVG\" v9.5.0 -- '*.cmake' 'CMakeLists.txt')",
+      "Bash(grep -q '^#define __TRACKED_VAR__\\\\b\\\\|^#define __TRACKED_VAR__' lv_conf.h)",
+      "Bash(cmake -B build -S .)",
+      "Bash(cmake --build build -j)",
+      "Bash(grep -nA20 \"^static void lv_chart_constructor\" /home/oudenijhuis/develop_tom/lv_camper_gui/lvgl/src/widgets/chart/lv_chart.c)",
+      "Bash(git -C lvgl diff v9.2.2 v9.5.0 -- src/core/lv_obj_pos.c)"
     ]
   }
 }

@@ -104,11 +104,12 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
 
         // Find the overall min and max yield values
         float hourly_yield[point_count];
+        for(int i = 0; i < point_count; i++) hourly_yield[i] = 0.0f;
         float prev_sample = history_data->max[0];
         float max_yield   = 0;
+        const int yield_count = (data_count - 1 < point_count) ? (data_count - 1) : point_count;
 
-        // Fix: Only iterate up to data_count-1 to prevent accessing beyond array bounds
-        for(int i = 0; i < point_count && i < data_count - 1; i++)
+        for(int i = 0; i < yield_count; i++)
         {
             if(prev_sample > history_data->max[i + 1])
             {
@@ -169,28 +170,20 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
             return false;
         }
 
-        // Fill chart with real data
-        for(int i = 0; i < point_count && i < data_count; i++)
+        // Fill chart with real data — iterate yield_count valid samples, newest first
+        for(int i = 0; i < yield_count; i++)
         {
-            // Convert data from history to chart format
-            // History data typically comes newest first, so we reverse it
-            int idx = data_count - i - 1;
-            if(idx >= 0)
+            int idx = yield_count - i - 1;
+            if(hourly_yield[idx] <= 0.1f) // small threshold for near-zero floats
             {
-                if(hourly_yield[idx] <=
-                   0.1f) // Use a small threshold to handle near-zero floating point values
-                {
-                    // Use LV_CHART_POINT_NONE for zero values to prevent displaying any bar
-                    lv_chart_set_next_value(solar_energy_chart, solar_hourly_energy_series,
-                                            LV_CHART_POINT_NONE);
-                }
-                else
-                {
-                    int yield_value =
-                        (int)(hourly_yield[idx] * 10); // Convert to fixed point with 1 decimal
-                    lv_chart_set_next_value(solar_energy_chart, solar_hourly_energy_series,
-                                            yield_value);
-                }
+                lv_chart_set_next_value(solar_energy_chart, solar_hourly_energy_series,
+                                        LV_CHART_POINT_NONE);
+            }
+            else
+            {
+                int yield_value = (int)(hourly_yield[idx] * 10); // fixed-point, 1 decimal
+                lv_chart_set_next_value(solar_energy_chart, solar_hourly_energy_series,
+                                        yield_value);
             }
         }
 

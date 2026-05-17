@@ -163,10 +163,10 @@ static lv_obj_t* create_battery_gauge(lv_obj_t* parent, const char* title, float
     lv_obj_set_style_border_width(scale_line, 0, 0);
 
     // Configure ticks and labels
-    lv_obj_set_style_transform_rotation(scale_line, 450, LV_PART_INDICATOR);
-    lv_obj_set_style_translate_x(scale_line, 10, LV_PART_INDICATOR);
     lv_obj_set_style_length(scale_line, 15, LV_PART_INDICATOR);
     lv_obj_set_style_pad_all(scale_line, 5, LV_PART_INDICATOR);
+    /* Push labels uniformly inward (away from ticks) on the round scale. */
+    lv_obj_set_style_pad_radial(scale_line, 1, LV_PART_INDICATOR);
     lv_obj_set_style_length(scale_line, 10, LV_PART_ITEMS);
     lv_obj_set_style_pad_all(scale_line, 5, LV_PART_ITEMS);
     lv_obj_set_style_line_opa(scale_line, LV_OPA_50, LV_PART_ITEMS);
@@ -204,15 +204,15 @@ static lv_obj_t* create_battery_gauge(lv_obj_t* parent, const char* title, float
 
     lv_scale_section_t* section1 = lv_scale_add_section(scale_line);
     lv_scale_section_set_range(section1, 90, 110);
-    lv_scale_section_set_style(section1, LV_PART_MAIN, &style_section_red);
+    lv_scale_set_section_style_main(scale_line, section1, &style_section_red);
 
     lv_scale_section_t* section2 = lv_scale_add_section(scale_line);
     lv_scale_section_set_range(section2, 110, 118);
-    lv_scale_section_set_style(section2, LV_PART_MAIN, &style_section_orange);
+    lv_scale_set_section_style_main(scale_line, section2, &style_section_orange);
 
     lv_scale_section_t* section3 = lv_scale_add_section(scale_line);
     lv_scale_section_set_range(section3, 118, 140);
-    lv_scale_section_set_style(section3, LV_PART_MAIN, &style_section_green);
+    lv_scale_set_section_style_main(scale_line, section3, &style_section_green);
 
     lv_obj_set_style_arc_rounded(scale_line, true, LV_PART_MAIN);
 
