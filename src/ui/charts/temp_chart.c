@@ -5,6 +5,7 @@
 
 #include "lvgl/lvgl.h"
 #include "temp_chart.h"
+#include "chart_utils.h"
 #include "../energy_temp_panel.h"
 #include "../../lib/logger.h"
 #include "../../data/data_manager.h"
@@ -92,41 +93,6 @@ void initialize_temperature_chart(lv_obj_t* chart_container)
     lv_label_set_text(end_time_label, "");
 
     lv_chart_refresh(chart); // Required after direct set
-}
-
-// Update function to format timestamp with date
-static void format_chart_timestamp(const char* iso_timestamp, char* output, size_t output_size)
-{
-    if(iso_timestamp == NULL || output == NULL ||
-       output_size < 12) // Need more space for DD-MM HH:MM
-    {
-        strcpy(output, "");
-        return;
-    }
-
-    // ISO format: YYYY-MM-DDThh:mm:ss
-    if(strlen(iso_timestamp) >= 16 && iso_timestamp[4] == '-' && iso_timestamp[7] == '-' &&
-       iso_timestamp[10] == 'T')
-    {
-        // Extract day (positions 8-9)
-        char day[3] = {iso_timestamp[8], iso_timestamp[9], '\0'};
-
-        // Extract month (positions 5-6)
-        char month[3] = {iso_timestamp[5], iso_timestamp[6], '\0'};
-
-        // Extract time (positions 11-16 for HH:MM)
-        char time[6] = {iso_timestamp[11], iso_timestamp[12], ':',
-                        iso_timestamp[14], iso_timestamp[15], '\0'};
-
-        // Format as "DD-MM HH:MM"
-        snprintf(output, output_size, "%s-%s %s", day, month, time);
-    }
-    else
-    {
-        // Fallback if timestamp isn't in expected format
-        strncpy(output, iso_timestamp, output_size - 1);
-        output[output_size - 1] = '\0';
-    }
 }
 
 // Add a new function to clean up all chart lines and labels
@@ -599,8 +565,8 @@ void refresh_climate_chart(void)
         char formatted_start[16] = {0};
         char formatted_end[16]   = {0};
 
-        format_chart_timestamp(first_timestamp, formatted_start, sizeof(formatted_start));
-        format_chart_timestamp(last_timestamp, formatted_end, sizeof(formatted_end));
+        chart_format_timestamp(first_timestamp, formatted_start, sizeof(formatted_start));
+        chart_format_timestamp(last_timestamp, formatted_end, sizeof(formatted_end));
 
         if(start_time_label != NULL)
         {

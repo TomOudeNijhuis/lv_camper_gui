@@ -5,6 +5,7 @@
 
 #include "lvgl/lvgl.h"
 #include "solar_chart.h"
+#include "chart_utils.h"
 #include "../energy_temp_panel.h"
 #include "../../lib/logger.h"
 #include "../../data/data_manager.h"
@@ -26,41 +27,6 @@ static lv_obj_t* start_time_label    = NULL;
 static lv_obj_t* end_time_label      = NULL;
 static bool      timestamps_valid    = false;
 
-// Format timestamp to display date and time
-static void format_chart_timestamp(const char* iso_timestamp, char* output, size_t output_size)
-{
-    if(iso_timestamp == NULL || output == NULL ||
-       output_size < 12) // Need more space for DD-MM HH:MM
-    {
-        strcpy(output, "");
-        return;
-    }
-
-    // ISO format: YYYY-MM-DDThh:mm:ss
-    if(strlen(iso_timestamp) >= 16 && iso_timestamp[4] == '-' && iso_timestamp[7] == '-' &&
-       iso_timestamp[10] == 'T')
-    {
-        // Extract day (positions 8-9)
-        char day[3] = {iso_timestamp[8], iso_timestamp[9], '\0'};
-
-        // Extract month (positions 5-6)
-        char month[3] = {iso_timestamp[5], iso_timestamp[6], '\0'};
-
-        // Extract time (positions 11-16 for HH:MM)
-        char time[6] = {iso_timestamp[11], iso_timestamp[12], ':',
-                        iso_timestamp[14], iso_timestamp[15], '\0'};
-
-        // Format as "DD-MM HH:MM"
-        snprintf(output, output_size, "%s-%s %s", day, month, time);
-    }
-    else
-    {
-        // Fallback if timestamp isn't in expected format
-        strncpy(output, iso_timestamp, output_size - 1);
-        output[output_size - 1] = '\0';
-    }
-}
-
 // Add a new function to clean up all chart lines and labels
 static void cleanup_solar_chart_lines_and_labels(void)
 {
@@ -77,57 +43,6 @@ static void cleanup_solar_chart_lines_and_labels(void)
     }
 }
 
-// Add a function to safely create a line with error handling
-static lv_obj_t* create_solar_line(lv_obj_t* parent, const char* line_name, lv_color_t color,
-                                   lv_point_precise_t* points)
-{
-    if(parent == NULL || points == NULL)
-    {
-        log_error("Cannot create %s: Invalid parent or points", line_name);
-        return NULL;
-    }
-
-    lv_obj_t* line = lv_line_create(parent);
-    if(line == NULL)
-    {
-        log_error("Failed to create %s", line_name);
-        return NULL;
-    }
-
-    lv_line_set_points(line, points, 2);
-    lv_obj_set_style_line_width(line, 1, 0);
-    lv_obj_set_style_line_color(line, color, 0);
-    lv_obj_set_style_line_dash_width(line, 3, 0);
-    lv_obj_set_style_line_dash_gap(line, 3, 0);
-
-    return line;
-}
-
-// Add a function to safely create a label with error handling
-static lv_obj_t* create_solar_label(lv_obj_t* parent, const char* label_name, lv_color_t color,
-                                    float value, lv_align_t alignment, lv_coord_t x_offset,
-                                    lv_coord_t y_offset)
-{
-    if(parent == NULL)
-    {
-        log_error("Cannot create %s: Invalid parent", label_name);
-        return NULL;
-    }
-
-    lv_obj_t* label = lv_label_create(parent);
-    if(label == NULL)
-    {
-        log_error("Failed to create %s", label_name);
-        return NULL;
-    }
-
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(label, color, 0);
-    lv_label_set_text_fmt(label, "%.1f Wh", value);
-    lv_obj_align(label, alignment, x_offset, y_offset);
-
-    return label;
-}
 
 void initialize_solar_chart(lv_obj_t* chart_container)
 {
@@ -238,7 +153,7 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
         solar_max_line_points[1].y = max_y_pos;
 
         solar_max_line =
-            create_solar_line(solar_energy_chart, "solar max line",
+            chart_create_line(solar_energy_chart, "solar max line",
                               lv_palette_main(LV_PALETTE_PURPLE), solar_max_line_points);
         if(solar_max_line == NULL)
         {
@@ -246,9 +161,9 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
         }
 
         // Add max value label using helper function
-        solar_max_label = create_solar_label(solar_energy_chart, "solar max label",
-                                             lv_palette_main(LV_PALETTE_PURPLE), max_yield,
-                                             LV_ALIGN_TOP_LEFT, 5, -8);
+        solar_max_label = chart_create_value_label(solar_energy_chart, "solar max label",
+                                                   lv_palette_main(LV_PALETTE_PURPLE), max_yield,
+                                                   "Wh", LV_ALIGN_TOP_LEFT, 5, -8);
         if(solar_max_label == NULL)
         {
             return false;
@@ -298,8 +213,8 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
             char formatted_start[16] = {0};
             char formatted_end[16]   = {0};
 
-            format_chart_timestamp(first_timestamp, formatted_start, sizeof(formatted_start));
-            format_chart_timestamp(last_timestamp, formatted_end, sizeof(formatted_end));
+            chart_format_timestamp(first_timestamp, formatted_start, sizeof(formatted_start));
+            chart_format_timestamp(last_timestamp, formatted_end, sizeof(formatted_end));
 
             if(start_time_label != NULL)
             {
