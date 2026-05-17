@@ -57,6 +57,8 @@ endforeach()
 
 string(APPEND LVGL_PKG_CONFIG_LIB "-llvgl_linux")
 
+# Source files are picked up by GLOB. Re-run `cmake -B build` after adding
+# a new .c file; otherwise the build will silently skip it.
 file(GLOB LV_LINUX_LIB_SRC src/lib/*.c)
 file(GLOB_RECURSE LV_LINUX_UI_SRC src/ui/*.c)
 file(GLOB LV_LINUX_DATA_SRC src/data/*.c)

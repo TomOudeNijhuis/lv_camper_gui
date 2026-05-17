@@ -997,20 +997,6 @@ entity_history_t* get_entity_history_data(void)
     // Zero-initialize the history copy to prevent accessing garbage data
     memset(history_copy, 0, sizeof(entity_history_t));
 
-    /*
-    // First verify this is the data we're looking for, but only if entity_history is valid
-    if(entity_history.valid && (entity_history.sensor_name[0] != '\0') &&
-       (strcmp(entity_history.sensor_name, request.sensor_name) != 0))
-    {
-        log_warning("Entity history mismatch: requested %s but have %s", request.sensor_name,
-                    entity_history.sensor_name);
-        // Mark as invalid since it's not the requested data
-        history_copy->valid = false;
-        pthread_mutex_unlock(&data_mutex);
-        return history_copy;
-    }
-    */
-
     // Copy basic fields
     history_copy->is_numeric = entity_history.is_numeric;
     strncpy(history_copy->sensor_name, entity_history.sensor_name,

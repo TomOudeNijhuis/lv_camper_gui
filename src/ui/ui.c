@@ -13,7 +13,6 @@
 #include "status_column.h"
 #include "logs_tab.h"
 #include "errors_tab.h"
-#include "analytics_tab.h"
 #include "energy_temp_panel.h" // Add this new include
 #include "../lib/logger.h"
 #include "lvgl/lvgl.h"
@@ -517,8 +516,7 @@ void create_ui(void)
     lv_obj_t*      tab_status      = lv_tabview_add_tab(tabview, "Status");
     const uint32_t errors_tab_idx  = 1;
     lv_obj_t*      tab_errors      = lv_tabview_add_tab(tabview, "Errors");
-    // lv_obj_t *tab_analytics = lv_tabview_add_tab(tabview, "Analytics");
-    lv_obj_t* tab_logs = lv_tabview_add_tab(tabview, "Logs");
+    lv_obj_t*      tab_logs        = lv_tabview_add_tab(tabview, "Logs");
 
     // Get the tab bar (btns container)
     lv_obj_t* tab_btns = lv_tabview_get_tab_btns(tabview);
@@ -618,7 +616,6 @@ void create_ui(void)
     create_status_column(left_column);
     create_energy_temp_panel(right_column);
     create_errors_tab(tab_errors, tabview, errors_tab_idx);
-    // create_analytics_tab(tab_analytics);
     create_logs_tab(tab_logs);
 
     // Create inactivity timer to automatically enter sleep mode

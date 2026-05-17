@@ -3,7 +3,10 @@
     "allow": [
       "Bash(make -C /home/oudenijhuis/develop_tom/lv_camper_gui/build -j)",
       "Bash(cmake ..)",
-      "Bash(make -j)"
+      "Bash(make -j)",
+      "Bash(cat)",
+      "Bash(bash /tmp/compare_fetches.sh)",
+      "Bash(grep -E \"\\\\.\\(o|a|so|bin|elf|exe\\)$|build/|build-arm64/\")"
     ]
   }
 }

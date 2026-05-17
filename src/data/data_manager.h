@@ -21,7 +21,6 @@ extern "C"
     typedef enum
     {
         FETCH_CAMPER_DATA = 0,
-        FETCH_SYSTEM_DATA,
         FETCH_SMART_SOLAR,
         FETCH_SMART_SHUNT,
         FETCH_CLIMATE_INSIDE,
