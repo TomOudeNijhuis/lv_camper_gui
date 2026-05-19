@@ -9,7 +9,8 @@
 #include "../lib/logger.h"
 #include "data_manager.h"
 
-#define MV_TO_V(mv_str) (atof(mv_str) / 1000.0f)
+/* API returns voltage as a decimal string in volts (e.g. "12.499"). */
+#define PARSE_VOLTS(v_str) (atof(v_str))
 
 /**
  * Helper function to get numeric value from JSON object, handling both integer and double types
@@ -360,17 +361,17 @@ bool parse_camper_states(const char* json_str, camper_sensor_t* camper_data)
         // Map entity_name to the appropriate field in the camper structure
         if(strcmp(entity_name, "household_voltage") == 0)
         {
-            temp_camper.household_voltage = MV_TO_V(state_str);
+            temp_camper.household_voltage = PARSE_VOLTS(state_str);
             field_count++;
         }
         else if(strcmp(entity_name, "starter_voltage") == 0)
         {
-            temp_camper.starter_voltage = MV_TO_V(state_str);
+            temp_camper.starter_voltage = PARSE_VOLTS(state_str);
             field_count++;
         }
         else if(strcmp(entity_name, "mains_voltage") == 0)
         {
-            temp_camper.mains_voltage = MV_TO_V(state_str);
+            temp_camper.mains_voltage = PARSE_VOLTS(state_str);
             field_count++;
         }
         else if(strcmp(entity_name, "household_state") == 0)

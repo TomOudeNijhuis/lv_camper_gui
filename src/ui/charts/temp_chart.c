@@ -51,7 +51,7 @@ void initialize_temperature_chart(lv_obj_t* chart_container)
     chart = lv_chart_create(chart_container);
     lv_obj_set_size(chart, LV_PCT(95), LV_PCT(80));
     lv_obj_center(chart);
-    lv_chart_set_type(chart, LV_CHART_TYPE_LINE);
+    lv_chart_set_type(chart, LV_CHART_TYPE_CURVE);
     lv_chart_set_div_line_count(chart, 5, 7);
 
     // Disable scrolling and scrollbar on the chart

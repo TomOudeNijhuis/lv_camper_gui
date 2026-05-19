@@ -343,6 +343,7 @@ void create_status_column(lv_obj_t* left_column)
     lv_obj_set_flex_flow(status_row_container, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(status_row_container, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
+    lv_obj_clear_flag(status_row_container, LV_OBJ_FLAG_SCROLLABLE);
 
     // Household switch with label
     lv_obj_t* household_container = lv_obj_create(status_row_container);
@@ -350,6 +351,7 @@ void create_status_column(lv_obj_t* left_column)
     lv_obj_set_style_border_width(household_container, 0, 0);
     lv_obj_set_style_pad_all(household_container, 5, 0);
     lv_obj_set_scrollbar_mode(household_container, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(household_container, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_flex_flow(household_container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(household_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
@@ -373,6 +375,7 @@ void create_status_column(lv_obj_t* left_column)
     lv_obj_set_style_border_width(pump_container, 0, 0);
     lv_obj_set_style_pad_all(pump_container, 5, 0);
     lv_obj_set_scrollbar_mode(pump_container, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(pump_container, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_flex_flow(pump_container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(pump_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
@@ -396,6 +399,7 @@ void create_status_column(lv_obj_t* left_column)
     lv_obj_set_style_border_width(mains_container, 0, 0);
     lv_obj_set_style_pad_all(mains_container, 5, 0);
     lv_obj_set_scrollbar_mode(mains_container, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(mains_container, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_flex_flow(mains_container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(mains_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);

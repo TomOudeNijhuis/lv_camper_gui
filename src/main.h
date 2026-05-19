@@ -56,8 +56,8 @@ extern "C"
 
 /* API endpoints */
 // #define API_BASE_URL "http://localhost:8000"
-#define API_BASE_URL "http://camperpi2.local:8000"
-
+// #define API_BASE_URL "http://camperpi2.local:8000"
+#define API_BASE_URL "http://192.168.68.167:8000"
 /* Network timeouts */
 #define HTTP_TIMEOUT_SECONDS 8 /* HTTP request timeout in seconds */
 
@@ -65,11 +65,11 @@ extern "C"
      * Data Update Intervals
      ****************************************************************************/
 
-#define DATA_CAMPER_UPDATE_INTERVAL_MS 2000 /* Camper states refresh interval in ms */
-#define DATA_OTHER_UPDATE_INTERVAL_MS 8935  /* Data other refresh interval in ms */
-#define DATA_CHART_UPDATE_INTERVAL_MS 6002  /* Chart refresh interval */
-#define LOG_REFRESH_INTERVAL_MS 2999        /* Log display refresh interval in ms */
-#define BACKGROUND_FETCH_SLEEP_US 199999    /* Background fetcher sleep time in microseconds */
+#define DATA_CAMPER_UPDATE_INTERVAL_MS 10000 /* Camper states refresh interval in ms */
+#define DATA_OTHER_UPDATE_INTERVAL_MS 8935   /* Data other refresh interval in ms */
+#define DATA_CHART_UPDATE_INTERVAL_MS 6002   /* Chart refresh interval */
+#define LOG_REFRESH_INTERVAL_MS 2999         /* Log display refresh interval in ms */
+#define BACKGROUND_FETCH_SLEEP_US 199999     /* Background fetcher sleep time in microseconds */
 
 #define MAX_LOG_ENTRIES 100              /* Maximum number of log entries to keep */
 #define INITIAL_LOG_LEVEL LOG_LEVEL_INFO /* Initial log level for displaying logs */
