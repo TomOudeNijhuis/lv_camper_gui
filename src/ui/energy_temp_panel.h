@@ -4,18 +4,16 @@
 #include "lvgl/lvgl.h"
 
 /**
- * Creates the energy and temperature panel
- * @param parent Parent container where the panel should be created
+ * Build the Status tab right column: enlarged temperature chart on top,
+ * summary panel with all data labels on the bottom. Also creates the two
+ * shared timers that drive label and chart updates for both this column
+ * and the Power tab.
  */
-void create_energy_temp_panel(lv_obj_t* parent);
+void create_status_right_column(lv_obj_t* right_column);
 
 /**
- * Updates the energy and temperature data displayed in the panel
- */
-void update_energy_temp_data(void);
-
-/**
- * Cleanup resources used by the energy and temperature panel
+ * Cleanup the shared timers, label pointers, and chart statics owned by
+ * this module. Called once from ui_cleanup().
  */
 void energy_temp_panel_cleanup(void);
 

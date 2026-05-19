@@ -13,7 +13,8 @@
 #include "status_column.h"
 #include "logs_tab.h"
 #include "errors_tab.h"
-#include "energy_temp_panel.h" // Add this new include
+#include "energy_temp_panel.h"
+#include "power_tab.h"
 #include "../lib/logger.h"
 #include "lvgl/lvgl.h"
 #include "../lib/lv_sdl_disp.h"
@@ -514,7 +515,8 @@ void create_ui(void)
 
     // Create tabs
     lv_obj_t*      tab_status      = lv_tabview_add_tab(tabview, "Status");
-    const uint32_t errors_tab_idx  = 1;
+    lv_obj_t*      tab_power       = lv_tabview_add_tab(tabview, "Power");
+    const uint32_t errors_tab_idx  = 2;
     lv_obj_t*      tab_errors      = lv_tabview_add_tab(tabview, "Errors");
     lv_obj_t*      tab_logs        = lv_tabview_add_tab(tabview, "Logs");
 
@@ -611,10 +613,13 @@ void create_ui(void)
     lv_obj_set_flex_align(right_column, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(right_column, 8, 0);
+    lv_obj_set_scrollbar_mode(right_column, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(right_column, LV_OBJ_FLAG_SCROLLABLE);
 
     // Create content for each tab
     create_status_column(left_column);
-    create_energy_temp_panel(right_column);
+    create_status_right_column(right_column);
+    create_power_tab_content(tab_power);
     create_errors_tab(tab_errors, tabview, errors_tab_idx);
     create_logs_tab(tab_logs);
 

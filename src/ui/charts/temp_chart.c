@@ -262,14 +262,13 @@ void update_climate_chart_with_history(entity_history_t* history_data, bool is_i
         return;
     }
 
-    // Extract timestamps from history data (only need to do this once, using internal data)
+    // Extract timestamps from history data (only need to do this once, using internal data).
+    // API returns oldest first: timestamps[0] = oldest, timestamps[N-1] = newest.
     if(is_internal && history_data->timestamps != NULL && data_count > 0)
     {
-        // First timestamp is oldest data (array is in reverse chronological order)
-        strncpy(first_timestamp, history_data->timestamps[data_count - 1],
-                sizeof(first_timestamp) - 1);
-        // Last timestamp is newest data (index 0)
-        strncpy(last_timestamp, history_data->timestamps[0], sizeof(last_timestamp) - 1);
+        strncpy(first_timestamp, history_data->timestamps[0], sizeof(first_timestamp) - 1);
+        strncpy(last_timestamp, history_data->timestamps[data_count - 1],
+                sizeof(last_timestamp) - 1);
         first_timestamp[sizeof(first_timestamp) - 1] = '\0';
         last_timestamp[sizeof(last_timestamp) - 1]   = '\0';
         timestamps_valid                             = true;
@@ -433,26 +432,18 @@ void refresh_climate_chart(void)
     // Use the dedicated function to clean up all lines and labels
     cleanup_temperature_chart_lines_and_labels();
 
-    // Fill chart with available data
+    // Fill chart left-to-right: oldest sample first, newest sample last.
     for(int i = 0; i < point_count && i < TEMP_CHART_POINTS; i++)
     {
-        // Convert data from history to chart format
-        // History data typically comes newest first, so we reverse it
-        int idx = TEMP_CHART_POINTS - i - 1;
-        if(idx >= 0)
-        {
-            // Internal temperature if valid
-            if(internal_data_valid)
-                lv_chart_set_next_value(chart, internal_temp_series, internal_temp_data[idx]);
-            else
-                lv_chart_set_next_value(chart, internal_temp_series, LV_CHART_POINT_NONE);
+        if(internal_data_valid)
+            lv_chart_set_next_value(chart, internal_temp_series, internal_temp_data[i]);
+        else
+            lv_chart_set_next_value(chart, internal_temp_series, LV_CHART_POINT_NONE);
 
-            // External temperature if valid
-            if(external_data_valid)
-                lv_chart_set_next_value(chart, external_temp_series, external_temp_data[idx]);
-            else
-                lv_chart_set_next_value(chart, external_temp_series, LV_CHART_POINT_NONE);
-        }
+        if(external_data_valid)
+            lv_chart_set_next_value(chart, external_temp_series, external_temp_data[i]);
+        else
+            lv_chart_set_next_value(chart, external_temp_series, LV_CHART_POINT_NONE);
     }
 
     // Get chart content dimensions

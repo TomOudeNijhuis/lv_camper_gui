@@ -170,31 +170,30 @@ bool update_solar_chart_with_history(entity_history_t* history_data)
             return false;
         }
 
-        // Fill chart with real data — iterate yield_count valid samples, newest first
+        // Fill chart left-to-right: oldest yield first, newest yield last.
         for(int i = 0; i < yield_count; i++)
         {
-            int idx = yield_count - i - 1;
-            if(hourly_yield[idx] <= 0.1f) // small threshold for near-zero floats
+            if(hourly_yield[i] <= 0.1f) // small threshold for near-zero floats
             {
                 lv_chart_set_next_value(solar_energy_chart, solar_hourly_energy_series,
                                         LV_CHART_POINT_NONE);
             }
             else
             {
-                int yield_value = (int)(hourly_yield[idx] * 10); // fixed-point, 1 decimal
+                int yield_value = (int)(hourly_yield[i] * 10); // fixed-point, 1 decimal
                 lv_chart_set_next_value(solar_energy_chart, solar_hourly_energy_series,
                                         yield_value);
             }
         }
 
-        // Extract timestamps from history data for timeline display
+        // Extract timestamps from history data for timeline display.
+        // API returns oldest first: timestamps[0] = oldest, timestamps[N-1] = newest.
         if(history_data->timestamps != NULL && data_count > 0)
         {
-            // First timestamp is oldest data (array is in reverse chronological order)
-            strncpy(first_timestamp, history_data->timestamps[data_count - 1],
+            strncpy(first_timestamp, history_data->timestamps[0],
                     sizeof(first_timestamp) - 1);
-            // Last timestamp is newest data (index 0)
-            strncpy(last_timestamp, history_data->timestamps[0], sizeof(last_timestamp) - 1);
+            strncpy(last_timestamp, history_data->timestamps[data_count - 1],
+                    sizeof(last_timestamp) - 1);
             first_timestamp[sizeof(first_timestamp) - 1] = '\0';
             last_timestamp[sizeof(last_timestamp) - 1]   = '\0';
             timestamps_valid                             = true;

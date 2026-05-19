@@ -299,212 +299,127 @@ static void update_long_timer_cb(lv_timer_t* timer)
     }
 }
 
-void create_temperature_container(lv_obj_t* right_column)
+/* Small helper: transparent fixed-height spacer for vertical flex columns. */
+static void add_vspacer(lv_obj_t* parent, int32_t height)
 {
-    // Temperature section - container with flex layout
-    lv_obj_t* temp_container = lv_obj_create(right_column);
-    lv_obj_set_size(temp_container, LV_PCT(100), 160);
-    lv_obj_set_style_border_width(temp_container, 0, 0);
-    lv_obj_set_style_radius(temp_container, 0, 0);
-    lv_obj_set_style_pad_all(temp_container, 5, 0);
-    lv_obj_set_scrollbar_mode(temp_container, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(temp_container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t* s = lv_obj_create(parent);
+    lv_obj_set_size(s, LV_PCT(100), height);
+    lv_obj_set_style_bg_opa(s, LV_OPA_0, 0);
+    lv_obj_set_style_border_width(s, 0, 0);
+    lv_obj_set_style_pad_all(s, 0, 0);
+    lv_obj_set_scrollbar_mode(s, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(s, LV_OBJ_FLAG_SCROLLABLE);
+}
 
-    // Use row layout for the container
-    lv_obj_set_flex_flow(temp_container, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(temp_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+/* Small helper: a centred 1/3-width vertical sub-column inside the
+ * summary row. Used for the three columns in the Status tab's summary
+ * panel. */
+static lv_obj_t* make_summary_subcol(lv_obj_t* parent)
+{
+    lv_obj_t* col = lv_obj_create(parent);
+    lv_obj_set_size(col, LV_PCT(33), LV_PCT(100));
+    lv_obj_set_style_border_width(col, 0, 0);
+    lv_obj_set_style_radius(col, 0, 0);
+    lv_obj_set_style_pad_all(col, 5, 0);
+    lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(col, 5, 0);
+    lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_scrollbar_mode(col, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(col, LV_OBJ_FLAG_SCROLLABLE);
+    return col;
+}
 
-    // Left column for labels
-    lv_obj_t* labels_column = lv_obj_create(temp_container);
-    lv_obj_set_size(labels_column, LV_PCT(20), LV_PCT(100));
-    lv_obj_set_style_border_width(labels_column, 0, 0);
-    lv_obj_set_style_radius(labels_column, 0, 0);
-    lv_obj_set_style_pad_all(labels_column, 0, 0);
-    lv_obj_set_flex_flow(labels_column, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(labels_column, 5, 0);
-    lv_obj_set_flex_align(labels_column, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_scrollbar_mode(labels_column, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(labels_column, LV_OBJ_FLAG_SCROLLABLE);
+/* Small helper: caption + value pair (caption styled with palette colour,
+ * value styled with montserrat_20). Returns the value label. */
+static lv_obj_t* add_caption_value(lv_obj_t* parent, const char* caption_text,
+                                   lv_palette_t caption_palette,
+                                   const char* initial_value)
+{
+    lv_obj_t* caption = lv_label_create(parent);
+    lv_label_set_text(caption, caption_text);
+    lv_obj_set_style_text_color(caption, lv_palette_main(caption_palette), 0);
 
-    lv_obj_t* internal_caption = lv_label_create(labels_column);
-    lv_label_set_text(internal_caption, "Internal");
-    lv_obj_set_style_text_color(internal_caption, lv_palette_main(LV_PALETTE_GREEN), 0);
+    lv_obj_t* value = lv_label_create(parent);
+    lv_label_set_text(value, initial_value);
+    lv_obj_set_style_text_font(value, &lv_font_montserrat_20, 0);
+    return value;
+}
 
-    // Internal temperature value with larger font
-    internal_temp_label = lv_label_create(labels_column);
-    lv_label_set_text(internal_temp_label, "--- °C");
-    lv_obj_set_style_text_font(internal_temp_label, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_align(internal_temp_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_width(internal_temp_label, LV_PCT(100));
+/**
+ * Build the Status tab right column.
+ *
+ * Layout (column flex on the parent, already configured by ui.c):
+ *  - Top   60%: temperature chart container (enlarged).
+ *  - Bottom 40%: summary panel with two sub-columns of labels.
+ *
+ * This function also creates the two shared timers that drive label
+ * updates and history fetches for both this column and the Power tab.
+ */
+void create_status_right_column(lv_obj_t* right_column)
+{
+    /* --- Top: enlarged temperature chart ------------------------------- */
+    lv_obj_t* temp_chart_container = lv_obj_create(right_column);
+    lv_obj_set_size(temp_chart_container, LV_PCT(100), LV_PCT(60));
+    lv_obj_set_style_border_width(temp_chart_container, 0, 0);
+    lv_obj_set_style_radius(temp_chart_container, 0, 0);
+    lv_obj_set_style_pad_all(temp_chart_container, 5, 0);
+    lv_obj_set_scrollbar_mode(temp_chart_container, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(temp_chart_container, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Spacer
-    lv_obj_t* spacer = lv_obj_create(labels_column);
-    lv_obj_set_height(spacer, 10);
-    lv_obj_set_style_bg_opa(spacer, LV_OPA_0, 0);
-    lv_obj_set_style_border_width(spacer, 0, 0);
-    lv_obj_set_scrollbar_mode(spacer, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(spacer, LV_OBJ_FLAG_SCROLLABLE);
-
-    // External temperature caption
-    lv_obj_t* external_caption = lv_label_create(labels_column);
-    lv_label_set_text(external_caption, "External");
-    lv_obj_set_style_text_color(external_caption, lv_palette_main(LV_PALETTE_BLUE), 0);
-
-    // External temperature value with larger font
-    external_temp_label = lv_label_create(labels_column);
-    lv_label_set_text(external_temp_label, "--- °C");
-    lv_obj_set_style_text_font(external_temp_label, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_align(external_temp_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_width(external_temp_label, LV_PCT(100));
-
-    // Right column for chart
-    lv_obj_t* chart_container = lv_obj_create(temp_container);
-    lv_obj_set_size(chart_container, LV_PCT(80), LV_PCT(100));
-    lv_obj_set_style_border_width(chart_container, 0, 0);
-    lv_obj_set_style_radius(chart_container, 0, 0);
-    lv_obj_set_style_pad_all(chart_container, 5, 0);
-    lv_obj_set_scrollbar_mode(chart_container, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(chart_container, LV_OBJ_FLAG_SCROLLABLE);
-
-    // Add title to the chart
-    lv_obj_t* chart_title = lv_label_create(chart_container);
+    lv_obj_t* chart_title = lv_label_create(temp_chart_container);
     lv_label_set_text(chart_title, "Hourly Temperature (°C)");
     lv_obj_set_style_pad_all(chart_title, -5, 0);
     lv_obj_align(chart_title, LV_ALIGN_TOP_MID, 0, 0);
 
-    initialize_temperature_chart(chart_container);
-}
+    initialize_temperature_chart(temp_chart_container);
 
-/**
- * Creates container with battery power and hourly energy chart
- */
-void create_energy_container(lv_obj_t* right_column)
-{
-    // Main container for battery energy and hourly chart
-    lv_obj_t* energy_container = lv_obj_create(right_column);
-    lv_obj_set_size(energy_container, LV_PCT(100), 160);
-    lv_obj_set_style_border_width(energy_container, 0, 0);
-    lv_obj_set_style_radius(energy_container, 0, 0);
-    lv_obj_set_style_pad_all(energy_container, 5, 0);
-    lv_obj_set_scrollbar_mode(energy_container, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(energy_container, LV_OBJ_FLAG_SCROLLABLE);
+    /* --- Bottom: summary panel ----------------------------------------- */
+    lv_obj_t* summary_container = lv_obj_create(right_column);
+    lv_obj_set_size(summary_container, LV_PCT(100), LV_PCT(40));
+    lv_obj_set_style_border_width(summary_container, 0, 0);
+    lv_obj_set_style_radius(summary_container, 0, 0);
+    lv_obj_set_style_pad_all(summary_container, 5, 0);
+    lv_obj_set_scrollbar_mode(summary_container, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(summary_container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_flex_flow(summary_container, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(summary_container, LV_FLEX_ALIGN_SPACE_EVENLY,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // Use row layout for the container
-    lv_obj_set_flex_flow(energy_container, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(energy_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
+    /* Column 1: temperatures */
+    lv_obj_t* temps_column = make_summary_subcol(summary_container);
+    internal_temp_label = add_caption_value(temps_column, "Internal",
+                                            LV_PALETTE_GREEN, "--- °C");
+    lv_obj_set_style_text_align(internal_temp_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_width(internal_temp_label, LV_PCT(100));
+    add_vspacer(temps_column, 25);
+    external_temp_label = add_caption_value(temps_column, "External",
+                                            LV_PALETTE_BLUE, "--- °C");
+    lv_obj_set_style_text_align(external_temp_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_width(external_temp_label, LV_PCT(100));
 
-    // Left column for battery energy display
-    lv_obj_t* power_column = lv_obj_create(energy_container);
-    lv_obj_set_size(power_column, LV_PCT(20), LV_PCT(100));
-    lv_obj_set_style_border_width(power_column, 0, 0);
-    lv_obj_set_style_radius(power_column, 0, 0);
-    lv_obj_set_style_pad_all(power_column, 5, 0);
-    lv_obj_set_flex_flow(power_column, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(power_column, 5, 0);
-    lv_obj_set_flex_align(power_column, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_scrollbar_mode(power_column, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(power_column, LV_OBJ_FLAG_SCROLLABLE);
+    /* Column 2: battery */
+    lv_obj_t* battery_column = make_summary_subcol(summary_container);
+    power_label = add_caption_value(battery_column, "Bat Power",
+                                    LV_PALETTE_ORANGE, "--- W");
+    add_vspacer(battery_column, 25);
+    battery_status_label = add_caption_value(battery_column, "Status",
+                                             LV_PALETTE_ORANGE, "-- %");
 
-    // Caption label
-    lv_obj_t* power_caption = lv_label_create(power_column);
-    lv_label_set_text(power_caption, "Bat Power");
-    lv_obj_set_style_text_color(power_caption, lv_palette_main(LV_PALETTE_ORANGE), 0);
+    /* Column 3: solar (with battery glyph + charging arrow at the bottom) */
+    lv_obj_t* solar_column = make_summary_subcol(summary_container);
+    solar_power_label = add_caption_value(solar_column, "Solar Power",
+                                          LV_PALETTE_PURPLE, "--- W");
+    add_vspacer(solar_column, 25);
 
-    // Battery power value label
-    power_label = lv_label_create(power_column);
-    lv_label_set_text(power_label, "--- W");
-    lv_obj_set_style_text_font(power_label, &lv_font_montserrat_20, 0);
+    /* Battery glyph + charging arrow share a row-flex so they sit
+     * side-by-side and centred. Caption matches the other "value" rows
+     * so the icons land on the same horizontal line as the SoC %. */
+    lv_obj_t* state_caption = lv_label_create(solar_column);
+    lv_label_set_text(state_caption, "State");
+    lv_obj_set_style_text_color(state_caption, lv_palette_main(LV_PALETTE_PURPLE), 0);
 
-    // Spacer
-    lv_obj_t* spacer = lv_obj_create(power_column);
-    lv_obj_set_height(spacer, 10);
-    lv_obj_set_style_bg_opa(spacer, LV_OPA_0, 0);
-    lv_obj_set_style_border_width(spacer, 0, 0);
-    lv_obj_set_scrollbar_mode(spacer, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(spacer, LV_OBJ_FLAG_SCROLLABLE);
-
-    // Caption label
-    lv_obj_t* status_caption = lv_label_create(power_column);
-    lv_label_set_text(status_caption, "Status");
-    lv_obj_set_style_text_color(status_caption, lv_palette_main(LV_PALETTE_ORANGE), 0);
-
-    // Battery status value label
-    battery_status_label = lv_label_create(power_column);
-    lv_label_set_text(battery_status_label, "-- %");
-    lv_obj_set_style_text_font(battery_status_label, &lv_font_montserrat_20, 0);
-
-    // Right column for hourly energy chart
-    lv_obj_t* hourly_chart_container = lv_obj_create(energy_container);
-    lv_obj_set_size(hourly_chart_container, LV_PCT(80), LV_PCT(100));
-    lv_obj_set_style_border_width(hourly_chart_container, 0, 0);
-    lv_obj_set_style_radius(hourly_chart_container, 0, 0);
-    lv_obj_set_style_pad_all(hourly_chart_container, 5, 0);
-    lv_obj_set_scrollbar_mode(hourly_chart_container, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(hourly_chart_container, LV_OBJ_FLAG_SCROLLABLE);
-
-    initialize_energy_chart(hourly_chart_container);
-}
-
-/**
- * Creates container with solar power and hourly energy chart
- */
-void create_solar_container(lv_obj_t* right_column)
-{
-    // Main container for solar energy and hourly chart
-    lv_obj_t* solar_container = lv_obj_create(right_column);
-    lv_obj_set_size(solar_container, LV_PCT(100), 160);
-    lv_obj_set_style_border_width(solar_container, 0, 0);
-    lv_obj_set_style_radius(solar_container, 0, 0);
-    lv_obj_set_style_pad_all(solar_container, 5, 0);
-    lv_obj_set_scrollbar_mode(solar_container, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(solar_container, LV_OBJ_FLAG_SCROLLABLE);
-
-    // Use row layout for the container
-    lv_obj_set_flex_flow(solar_container, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(solar_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-
-    // Left column for solar energy display
-    lv_obj_t* power_column = lv_obj_create(solar_container);
-    lv_obj_set_size(power_column, LV_PCT(20), LV_PCT(100));
-    lv_obj_set_style_border_width(power_column, 0, 0);
-    lv_obj_set_style_radius(power_column, 0, 0);
-    lv_obj_set_style_pad_all(power_column, 5, 0);
-    lv_obj_set_flex_flow(power_column, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(power_column, 5, 0);
-    lv_obj_set_flex_align(power_column, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_scrollbar_mode(power_column, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(power_column, LV_OBJ_FLAG_SCROLLABLE);
-
-    // Caption label
-    lv_obj_t* power_caption = lv_label_create(power_column);
-    lv_label_set_text(power_caption, "Solar Power");
-    lv_obj_set_style_text_color(power_caption, lv_palette_main(LV_PALETTE_PURPLE), 0);
-
-    // Battery power value label
-    solar_power_label = lv_label_create(power_column);
-    lv_label_set_text(solar_power_label, "--- W");
-    lv_obj_set_style_text_font(solar_power_label, &lv_font_montserrat_20, 0);
-
-    // Spacer
-    lv_obj_t* spacer = lv_obj_create(power_column);
-    lv_obj_set_height(spacer, 10);
-    lv_obj_set_style_bg_opa(spacer, LV_OPA_0, 0);
-    lv_obj_set_style_border_width(spacer, 0, 0);
-    lv_obj_set_scrollbar_mode(spacer, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(spacer, LV_OBJ_FLAG_SCROLLABLE);
-
-    // Caption label for state
-    // lv_obj_t* solar_state_caption = lv_label_create(power_column);
-    // lv_label_set_text(solar_state_caption, "State");
-
-    // Create container for the icons
-    lv_obj_t* icon_container = lv_obj_create(power_column);
+    lv_obj_t* icon_container = lv_obj_create(solar_column);
     lv_obj_set_size(icon_container, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_set_style_bg_opa(icon_container, LV_OPA_0, 0);
     lv_obj_set_style_border_width(icon_container, 0, 0);
@@ -515,49 +430,19 @@ void create_solar_container(lv_obj_t* right_column)
     lv_obj_set_scrollbar_mode(icon_container, LV_SCROLLBAR_MODE_OFF);
     lv_obj_clear_flag(icon_container, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Battery state icon
     solar_state_icon = lv_label_create(icon_container);
     lv_label_set_text(solar_state_icon, "");
     lv_obj_set_style_text_font(solar_state_icon, &lv_awesome_16, 0);
-    lv_obj_set_style_text_font(solar_state_icon, &lv_awesome_16, 0);
 
-    // Charging icon
     charging_icon = lv_label_create(icon_container);
     lv_label_set_text(charging_icon, "");
     lv_obj_set_style_text_font(charging_icon, &lv_awesome_16, 0);
 
-    // Right column for hourly energy chart
-    lv_obj_t* hourly_chart_container = lv_obj_create(solar_container);
-    lv_obj_set_size(hourly_chart_container, LV_PCT(80), LV_PCT(100));
-    lv_obj_set_style_border_width(hourly_chart_container, 0, 0);
-    lv_obj_set_style_radius(hourly_chart_container, 0, 0);
-    lv_obj_set_style_pad_all(hourly_chart_container, 5, 0);
-    lv_obj_set_scrollbar_mode(hourly_chart_container, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(hourly_chart_container, LV_OBJ_FLAG_SCROLLABLE);
-
-    initialize_solar_chart(hourly_chart_container);
-}
-
-/**
- * Creates energy and temperature panel in the provided parent container
- */
-void create_energy_temp_panel(lv_obj_t* right_column)
-{
-    // Use column layout
-    lv_obj_set_flex_flow(right_column, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(right_column, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(right_column, 8, 0);
-    lv_obj_set_scrollbar_mode(right_column, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(right_column, LV_OBJ_FLAG_SCROLLABLE);
-
-    create_temperature_container(right_column);
-    create_energy_container(right_column);
-    create_solar_container(right_column);
-
-    // Create a timer to update the values periodically
-    update_timer = lv_timer_create(update_camper_timer_cb, DATA_OTHER_UPDATE_INTERVAL_MS, NULL);
-    update_long_timer = lv_timer_create(update_long_timer_cb, DATA_CHART_UPDATE_INTERVAL_MS, NULL);
+    /* --- Timers (shared with the Power tab; teardown in cleanup) ------- */
+    update_timer = lv_timer_create(update_camper_timer_cb,
+                                   DATA_OTHER_UPDATE_INTERVAL_MS, NULL);
+    update_long_timer = lv_timer_create(update_long_timer_cb,
+                                        DATA_CHART_UPDATE_INTERVAL_MS, NULL);
 }
 
 /**

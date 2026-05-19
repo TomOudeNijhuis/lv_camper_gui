@@ -168,32 +168,26 @@ bool update_energy_chart_with_history(entity_history_t* history_data)
             return false;
         }
 
-        // Fill chart with calculated Ah data
+        // Fill chart left-to-right: oldest hour first, newest hour last.
         for(int i = 0; i < point_count && i < data_count - 1; i++)
         {
-            // Convert data from history to chart format
-            // History data typically comes newest first, so we reverse it
-            int idx = data_count - i - 2;
-            if(idx >= 0)
-            {
-                // For zero or negative values (charging periods), display a minimal positive value
-                // so it's visible in the chart
-                int ah_value =
-                    (hourly_ah[idx] <= 0.1f)
-                        ? 10
-                        : (int)(hourly_ah[idx] * 10); // Convert to fixed point with 1 decimal
-                lv_chart_set_next_value(energy_chart, hourly_energy_series, ah_value);
-            }
+            // For zero or negative values (charging periods), display a minimal positive value
+            // so it's still visible in the chart.
+            int ah_value =
+                (hourly_ah[i] <= 0.1f)
+                    ? 10
+                    : (int)(hourly_ah[i] * 10); // Convert to fixed point with 1 decimal
+            lv_chart_set_next_value(energy_chart, hourly_energy_series, ah_value);
         }
 
-        // Extract timestamps from history data for timeline display
+        // Extract timestamps from history data for timeline display.
+        // API returns oldest first: timestamps[0] = oldest, timestamps[N-1] = newest.
         if(history_data->timestamps != NULL && data_count > 0)
         {
-            // First timestamp is oldest data (array is in reverse chronological order)
-            strncpy(first_timestamp, history_data->timestamps[data_count - 1],
+            strncpy(first_timestamp, history_data->timestamps[0],
                     sizeof(first_timestamp) - 1);
-            // Last timestamp is newest data (index 0)
-            strncpy(last_timestamp, history_data->timestamps[0], sizeof(last_timestamp) - 1);
+            strncpy(last_timestamp, history_data->timestamps[data_count - 1],
+                    sizeof(last_timestamp) - 1);
             first_timestamp[sizeof(first_timestamp) - 1] = '\0';
             last_timestamp[sizeof(last_timestamp) - 1]   = '\0';
             timestamps_valid                             = true;
